@@ -15,8 +15,7 @@
     <div class="facts" id="facts"></div>
   </header>
 
-  <p id="loading" class="hint">Loading your group…</p>
-  <p id="fatal" class="msg err" hidden></p>
+    <p id="fatal" class="msg err" hidden></p>
 
   <!-- Your match -->
   <section id="matchSec" hidden>
@@ -92,12 +91,15 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { showLoading, hideLoading } from "./santa-loader.js";
 
 const $ = id => document.getElementById(id);
 const S = { secret: null, me: null, game: {}, roster: [], myWish: null, match: undefined, matchWish: null, revealed: false };
 const LS = "secret-santa-link";
+let firstLoad = true;
+showLoading("Santa's fetching your group…", true);
 
-function fatal(t){ $("loading").hidden = true; const f = $("fatal"); f.textContent = t; f.hidden = false; }
+function fatal(t){ if (firstLoad) { firstLoad = false; hideLoading(); } const f = $("fatal"); f.textContent = t; f.hidden = false; }
 if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("This page isn't set up yet. The organizer still needs to add the Firebase settings (SETUP.md, step 4)."); throw new Error("not configured"); }
 
 const db = getFirestore(initializeApp(firebaseConfig));
@@ -113,7 +115,7 @@ let gotGame = false, gotRoster = false, gotMe = false;
 
 function render(){
   if (!gotGame || !gotRoster || !gotMe) return;
-  $("loading").hidden = true;
+  if (firstLoad) { firstLoad = false; hideLoading(); }
   const g = S.game, me = S.me;
   $("title").textContent = g.ev || "Secret Santa";
   document.title = g.ev || "Secret Santa";
@@ -169,6 +171,7 @@ function watchMe(secret){
   unsubs.forEach(u => u()); unsubs = [];
   S.secret = secret;
   if (!secret) { S.me = null; gotMe = true; render(); return; }
+  showLoading("Finding your name on the list…");
   getDoc(doc(db, "people", secret)).then(s => {
     if (!s.exists()) { S.me = null; S.secret = null; store(LS, null); if (location.hash) history.replaceState(null, "", location.pathname); gotMe = true; render(); return; }
     S.me = s.data(); gotMe = true;
@@ -185,7 +188,7 @@ function watchMe(secret){
     }));
     unsubs.push(() => matchWishUnsub && matchWishUnsub());
     render();
-  }).catch(() => fatal("Couldn't load your details. Check your connection and reload."));
+  }).catch(() => fatal("Couldn't load your details. Check your connection and reload.")).finally(hideLoading);
 }
 
 const fromHash = location.hash.slice(1);
@@ -204,8 +207,10 @@ $("joinForm").addEventListener("submit", async e => {
   b.set(doc(db, "people", secret), { name, wishId, rosterId, joinedAt });
   b.set(doc(db, "wishes", wishId), { name, wishlist: "" });
   b.set(doc(db, "roster", rosterId), { name, joinedAt });
+  showLoading("Adding you to Santa's list…");
   try { await b.commit(); gotMe = false; watchMe(secret); }
   catch (err) { msg("joinMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't join now." : "Couldn't join just now. Check your connection and try again."); }
+  finally { hideLoading(); }
   $("joinBtn").disabled = false;
 });
 

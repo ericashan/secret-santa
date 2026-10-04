@@ -94,6 +94,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { firebaseConfig } from "./firebase-config.js";
+import { showLoading, hideLoading } from "./santa-loader.js";
 
 const $ = id => document.getElementById(id);
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -114,8 +115,15 @@ $("copyInvite").onclick = () => copy(base, $("copyInvite"), "Copy invite link");
 $("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch(e){ msg("authMsg", "err", e.code === "auth/unauthorized-domain" ? "This website isn't approved for sign-in yet. Add it under Authentication → Settings → Authorized domains (SETUP.md, step 6)." : "Sign-in didn't finish. Try again."); } };
 $("signOut").onclick = () => signOut(auth);
 
+let booting = true;
+showLoading("Santa's checking his list…", true);
 onAuthStateChanged(auth, async user => {
   unsubs.forEach(u => u()); unsubs = [];
+  if (!booting) showLoading("Santa's checking his list…");
+  booting = false;
+  try { await openOrganizer(user); } finally { hideLoading(); }
+});
+async function openOrganizer(user){
   $("app").hidden = true;
   if (!user) { $("signedOut").hidden = false; return; }
   $("signedOut").hidden = true;
@@ -127,8 +135,10 @@ onAuthStateChanged(auth, async user => {
   if (!g.exists()) await setDoc(doc(db, "config", "game"), { ev: "", budget: "", date: "", drawn: false, drawnAt: null });
   unsubs.push(onSnapshot(doc(db, "config", "game"), s => { S.game = s.data() || {}; render(); }));
   unsubs.push(onSnapshot(doc(db, "admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
-  unsubs.push(onSnapshot(collection(db, "people"), s => { const p = {}; s.docs.forEach(d => p[d.id] = d.data()); S.people = p; render(); }));
-});
+  await new Promise(resolve => {
+    unsubs.push(onSnapshot(collection(db, "people"), s => { const p = {}; s.docs.forEach(d => p[d.id] = d.data()); S.people = p; render(); resolve(); }, () => resolve()));
+  });
+}
 
 function setVal(id, v){ const el = $(id); if (document.activeElement !== el && el.value !== (v || "")) el.value = v || ""; }
 function render(){
@@ -182,9 +192,11 @@ $("addEx").onclick = () => { const a = $("exA").value, b = $("exB").value; if (!
 
 async function removePerson(id){
   const p = S.people[id]; if (!p) return;
+  showLoading("Taking " + p.name + " off the list…");
   const b = writeBatch(db);
   b.delete(doc(db, "people", id)); b.delete(doc(db, "wishes", p.wishId)); b.delete(doc(db, "roster", p.rosterId));
   try { await b.commit(); saveExcl(S.excl.filter(q => !q.includes(id))); } catch(e){ msg("drawMsg", "err", "Couldn't remove " + p.name + ". Try again."); }
+  finally { hideLoading(); }
 }
 
 function drawPairs(ids, excl){
@@ -201,17 +213,20 @@ $("drawBtn").onclick = async () => {
   const ids = Object.keys(S.people);
   const pairs = drawPairs(ids, S.excl.filter(p => S.people[p[0]] && S.people[p[1]]));
   if (!pairs) { msg("drawMsg", "err", "There's no way to match everyone with these rules. Remove a rule or wait for more people to join."); return; }
-  $("drawBtn").disabled = true; msg("drawMsg", "ok", "Drawing…");
+  $("drawBtn").disabled = true; msg("drawMsg", "", "");
+  showLoading("Pulling names from the sack…");
   const b = writeBatch(db);
   pairs.forEach(([giver, rec]) => b.set(doc(db, "matches", giver), { name: S.people[rec].name, wishId: S.people[rec].wishId }));
   b.set(doc(db, "config", "game"), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
   try { await b.commit(); msg("drawMsg", "ok", "Names drawn for " + pairs.length + " people. Everyone can open the group page to see their match."); }
   catch (e) { msg("drawMsg", "err", "The draw didn't finish. Try again."); }
+  finally { hideLoading(); }
   render();
 };
 $("resetBtn").onclick = () => { $("resetConfirm").hidden = false; $("resetBtn").hidden = true; };
 $("resetNo").onclick = () => { $("resetConfirm").hidden = true; $("resetBtn").hidden = false; };
 $("resetYes").onclick = async () => {
+  showLoading("Emptying the sack…");
   try {
     const m = await getDocs(collection(db, "matches"));
     const b = writeBatch(db);
@@ -220,6 +235,7 @@ $("resetYes").onclick = async () => {
     await b.commit();
     msg("drawMsg", "ok", "Matches erased. Joining is open again and you can draw when ready.");
   } catch (e) { msg("drawMsg", "err", "Couldn't erase the matches. Try again."); }
+  finally { hideLoading(); }
   $("resetConfirm").hidden = true; $("resetBtn").hidden = false;
 };
 </script>

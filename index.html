@@ -11,16 +11,16 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js">
-<link rel="modulepreload" href="./app.js?v=202610041137">
-<link rel="modulepreload" href="./i18n.js?v=202610041137">
-<link rel="modulepreload" href="./santa-loader.js?v=202610041137">
-<link rel="modulepreload" href="./nav.js?v=202610041137">
-<link rel="modulepreload" href="./calendar.js?v=202610041137">
-<link rel="modulepreload" href="./firebase-config.js?v=202610041137">
+<link rel="modulepreload" href="./app.js?v=202610041142">
+<link rel="modulepreload" href="./i18n.js?v=202610041142">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041142">
+<link rel="modulepreload" href="./nav.js?v=202610041142">
+<link rel="modulepreload" href="./calendar.js?v=202610041142">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041142">
 <!-- Fonts load without holding up the page -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=202610041137">
+<link rel="stylesheet" href="style.css?v=202610041142">
 </head>
 <body>
 <div class="wrap">
@@ -91,19 +91,20 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, loadAuth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite, formatMoney, currencyOf } from "./app.js?v=202610041137";
+         copyText, canShare, shareInvite, formatMoney, currencyOf } from "./app.js?v=202610041142";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041137";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041142";
 window.__ssReady = true;
 const { onAuthStateChanged } = (await loadAuth()) || {};
-import { calendarIcon } from "./calendar.js?v=202610041137";
-import { t, startTranslating } from "./i18n.js?v=202610041137";
+import { calendarIcon } from "./calendar.js?v=202610041142";
+import { t, startTranslating } from "./i18n.js?v=202610041142";
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041137";
+import { mountNav } from "./nav.js?v=202610041142";
 mountNav();
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }
 
+const SHARE_ICON = '<svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 15V4M8 8l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 11v7.5A1.5 1.5 0 0 0 7.5 20h9a1.5 1.5 0 0 0 1.5-1.5V11" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg>';
 const live = {};      // gid -> group document (or null if it no longer exists)
 const subs = {};      // gid -> unsubscribe
 const photos = {};    // gid -> photo data URL
@@ -163,16 +164,19 @@ function render(){
       else if (!(g && g.drawn)) { const a = el("a", "button" + (m.organizer ? "" : " primary"), "Join this group"); a.href = groupLink(gid); actions.append(a); }
       if (m.organizer) { const a = el("a", "button", "Organize"); a.href = organizeLink(gid); actions.append(a); }
     }
-    // Organizers can send the invite straight from here.
-    let shareRow = null;
+    // Organizers get one small Invite button (share sheet, or copies the link where sharing isn't available).
     if (m.organizer && g && !g.drawn) {
-      shareRow = el("div", "sharebar");
-      shareRow.append(el("span", "label", "Invite people"));
-      const btns = el("div", "row");
       const url = groupLink(gid);
-      if (canShare()) { const sb = el("button", "small", "Share…"); sb.type = "button"; sb.onclick = () => shareInvite(name, url); btns.append(sb); }
-      const cp = el("button", "small", "Copy link"); cp.type = "button"; cp.onclick = () => copyText(url, cp, "Copy link"); btns.append(cp);
-      shareRow.append(btns);
+      const inv = el("button", "button invitebtn"); inv.type = "button";
+      const label = () => { inv.innerHTML = SHARE_ICON; inv.append(el("span", null, t("Invite"))); };
+      label(); inv.setAttribute("aria-label", t("Invite people to {name}", { name }));
+      inv.onclick = async () => {
+        if (canShare()) { shareInvite(name, url); return; }
+        try { await navigator.clipboard.writeText(url); inv.textContent = t("Invite link copied"); }
+        catch (e) { inv.textContent = t("Couldn't copy"); }
+        setTimeout(label, 1800);
+      };
+      actions.append(inv);
     }
     const hide = el("button", "ghost small", "Remove from my list"); hide.type = "button";
     const confirm = el("div", "confirm"); confirm.hidden = true;
@@ -184,7 +188,6 @@ function render(){
     no.onclick = () => { confirm.hidden = true; hide.hidden = false; };
     yes.onclick = async () => { await forgetGroup(gid); mine = localGroups(); watchGroups(); render(); };
     actions.append(hide);
-    if (shareRow) card.append(shareRow);
     card.append(actions, confirm);
     box.append(card);
   });

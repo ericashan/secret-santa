@@ -1,8 +1,8 @@
 // Shared setup for every page: Firebase, small helpers, and "my groups".
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { t, locale } from "./i18n.js?v=202610041137";
-import { firebaseConfig } from "./firebase-config.js?v=202610041137";
+import { t, locale } from "./i18n.js?v=202610041142";
+import { firebaseConfig } from "./firebase-config.js?v=202610041142";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -195,7 +195,13 @@ export function parseAmount(v){
 export function formatMoney(v, currency = "USD"){
   const n = parseAmount(v);
   if (n === null) return String(v || "");
-  try { return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: Number.isInteger(n) ? 0 : 2 }).format(n); }
+  try {
+    const out = new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: Number.isInteger(n) ? 0 : 2 }).format(n);
+    // Add the code ("$30 USD", "₩30,000 KRW") so nobody wonders which dollar or won it is.
+    // Symbols that already say it ("CA$", "US$") don't need it.
+    const sym = currencySymbol(currency);
+    return /[A-Za-z]/.test(sym) ? out : out + " " + currency;
+  }
   catch (e) { return currency + " " + n; }
 }
 export function currencySymbol(currency = "USD"){

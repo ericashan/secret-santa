@@ -403,5 +403,8 @@ export default {
   "Nice! 1 more idea would help.": "좋아요! 하나만 더 적어 주면 큰 도움이 돼요.",
   "Nice! {n} more ideas would help.": "좋아요! {n}개 더 적어 주면 큰 도움이 돼요.",
   "More prompts…": "더 보기…",
-  "Currency": "통화"
+  "Currency": "통화",
+  "Invite": "초대",
+  "Invite people to {name}": "{name}에 사람들 초대하기",
+  "Invite link copied": "초대 링크를 복사했어요"
 };

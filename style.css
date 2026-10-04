@@ -238,3 +238,5 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .moneysym{padding:0 4px 0 12px;font-weight:700;color:var(--muted);white-space:nowrap}
 .money input{border:none;background:transparent;padding-left:4px;outline:none}
 .money input:focus-visible{outline:none}
+.invitebtn{display:inline-flex;align-items:center;gap:6px}
+.invitebtn svg{color:var(--accent)}

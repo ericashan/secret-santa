@@ -3,7 +3,7 @@
   --bg:#eef2f1; --paper:#ffffff; --ink:#173a2f; --muted:#5b6f68; --line:#d3dcd9;
   --accent:#b3263e; --accent-ink:#ffffff; --pine:#1f5a45; --gold:#c8952c; --soft:#e3ebe8;
   --ok:#1f7a4d; --err:#b3263e;
-  --display:"Bagel Fat One","Cooper Black",Georgia,serif;
+  --display:"Bagel Fat One","Jua","Cooper Black",Georgia,serif;
   --body:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif;
   color-scheme:light;
 }
@@ -157,3 +157,9 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .addropt-detail{font-size:.8rem;font-weight:500;opacity:.85}
 .hint.ok{color:var(--ok)}
 .badge.warn{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}
+
+/* Language picker */
+.langbar{display:flex;justify-content:flex-end;margin-bottom:-14px}
+.langpick{display:inline-flex;align-items:center;gap:6px;color:var(--muted);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:2px 4px 2px 10px}
+.langpick select{border:none;background:transparent;padding:6px 4px;width:auto;font-size:.9rem;font-weight:600;color:var(--ink)}
+.sr-only{position:absolute;width:1px;height:1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap}

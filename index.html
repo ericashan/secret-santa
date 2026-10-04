@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041028">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=202610041039">
 </head>
 <body>
 <div class="wrap">
@@ -26,7 +26,7 @@
     <div id="empty" class="panel" hidden>
       <span class="label">Nothing here yet</span>
       <p class="hint">Got an invite link from someone? Open it and join with your name. Your group will show up here.</p>
-      <p class="hint">Want to run your own? Tap <b>Start a group</b>.</p>
+      <p class="hint" data-i18n-html>Want to run your own? Tap <b>Start a group</b>.</p>
     </div>
   </section>
 
@@ -70,11 +70,13 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite, smsHref } from "./app.js?v=202610041028";
+         copyText, canShare, shareInvite, smsHref } from "./app.js?v=202610041039";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041039";
 window.__ssReady = true;
+import { t, startTranslating } from "./i18n.js?v=202610041039";
+startTranslating();
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }
 
@@ -104,16 +106,16 @@ function render(){
   ids.forEach(gid => {
     const m = mine[gid], g = live[gid];
     const card = el("article", "panel groupcard");
-    const name = (g && g.ev) || m.groupName || "Secret Santa group";
+    const name = (g && g.ev) || m.groupName || t("Secret Santa group");
     // Where tapping the group takes you: your page, else organizing, else joining.
     const mainHref = g === null ? null : m.secret ? personalLink(gid, m.secret) : m.organizer ? organizeLink(gid) : groupLink(gid);
     if (photos[gid] && g !== null) {
-      const pic = el("a", "groupphoto"); pic.href = mainHref; pic.setAttribute("aria-label", "Open " + name);
+      const pic = el("a", "groupphoto"); pic.href = mainHref; pic.setAttribute("aria-label", t("Open {name}", { name }));
       const img = el("img"); img.src = photos[gid]; img.alt = ""; pic.append(img); card.append(pic);
     }
     const top = el("div", "row spread");
     const h = el("h3", "groupname");
-    if (mainHref) { const a = el("a", null, name); a.href = mainHref; h.append(a); } else h.textContent = name;
+    if (mainHref) { const a = el("a", null, name); a.href = mainHref; a.setAttribute("translate", "no"); h.append(a); } else { h.textContent = name; h.setAttribute("translate", "no"); }
     top.append(h);
     if (g) { const st = el("span", "status"); const dot = el("span", "dot" + (g.drawn ? " locked" : "")); st.append(dot, g.drawn ? "Names drawn" : "Waiting for the draw"); top.append(st); }
     card.append(top);
@@ -122,11 +124,11 @@ function render(){
       card.append(el("p", "hint", "This group no longer exists. The organizer may have deleted it."));
     } else {
       const facts = el("div", "facts");
-      const fact = (k, v) => { const s = el("span", "fact"); s.append(k + " "); s.append(el("b", null, v)); facts.append(s); };
+      const fact = (k, v, raw) => { const s = el("span", "fact"); s.append(k + " "); const b = el("b", null, v); if (raw) b.setAttribute("translate", "no"); s.append(b); facts.append(s); };
       if (g && g.budget) fact("Limit", g.budget);
       if (g && g.date) fact("Exchange", fmtDate(g.date));
       if (m.organizer) fact("You", "organize");
-      if (m.myName) fact("In as", m.myName);
+      if (m.myName) fact("In as", m.myName, true);
       if (facts.childNodes.length) card.append(facts);
     }
 
@@ -167,7 +169,7 @@ function render(){
 // ---------- Account ----------
 function showAccount(user){
   $("signedOutBox").hidden = !!user; $("signedInBox").hidden = !user;
-  if (user) $("whoami").textContent = "Signed in as " + (user.email || user.displayName || "you");
+  if (user) $("whoami").textContent = t("Signed in as {who}", { who: user.email || user.displayName || t("you") });
 }
 showLoading("Santa's fetching your groups…", true);
 authReady().then(async user => {
@@ -201,7 +203,7 @@ $("createForm").addEventListener("submit", async e => {
   if (!user) {
     // Organizers sign in so nobody else can take over their group or redo the draw.
     try { user = await signInWithGoogle(); mine = localGroups(); }
-    catch (err) { msg("createMsg", "err", "Organizers sign in with Google so nobody else can change the draw. " + signInError(err)); return; }
+    catch (err) { msg("createMsg", "err", t("Organizers sign in with Google so nobody else can change the draw.") + " " + signInError(err)); return; }
   }
   $("createBtn").disabled = true;
   showLoading("Santa's starting your group…");

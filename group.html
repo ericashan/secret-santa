@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041028">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=202610041039">
 </head>
 <body>
 <div class="wrap">
@@ -70,7 +70,7 @@
     <div class="panel">
       <p class="hint">This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.</p>
       <div id="addrView" hidden>
-        <div class="addrcard" id="addrCard"></div>
+        <div class="addrcard" id="addrCard" translate="no"></div>
         <p class="hint" id="addrBadge"></p>
         <div class="row"><button type="button" class="small" id="addrEdit">Edit address</button></div>
       </div>
@@ -123,7 +123,7 @@
     <div class="panel">
       <span class="label">Your personal link</span>
       <p class="hint">Save this link. It's how you get back to your wishlist and your match on any phone or computer. Don't share it.</p>
-      <div class="linkbox" id="myLink"></div>
+      <div class="linkbox" id="myLink" translate="no"></div>
       <div class="row"><button type="button" class="small" id="copyLink">Copy link</button></div>
     </div>
   </section>
@@ -148,12 +148,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 </script>
 <script type="module">
 import { configured, db, $, el, msg, randomId, fmtDate, personalLink, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041028";
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041039";
 import { doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041028";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041028";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041039";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041039";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041039";
 window.__ssReady = true;
+import { t, startTranslating } from "./i18n.js?v=202610041039";
+const tr = t;
+startTranslating();
 
 const GID = groupIdFromUrl();
 if (!GID) { location.replace(homeLink()); throw new Error("no group"); }
@@ -213,7 +216,7 @@ function render(){
   $("wishSec").hidden = $("linkSec").hidden = $("kidsSec").hidden = !me;
   $("matchSec").hidden = !(g.drawn && me);
   if (me) {
-    $("hello").textContent = "Hi " + me.name + "! Your wishlist";
+    $("hello").textContent = t("Hi {name}! Your wishlist", { name: me.name });
     $("myLink").textContent = linkFor(S.secret);
     syncTextarea($("myWish"), me.wishId);
     $("volunteer").checked = !!me.kidVolunteer;
@@ -228,14 +231,14 @@ function render(){
   $("peopleSec").hidden = false;
   const ppl = $("people"); ppl.textContent = "";
   const myKidRoster = new Set(S.kids.map(k => k.rosterId));
-  S.roster.forEach(r => { const c = el("span", "chip");
+  S.roster.forEach(r => { const c = el("span", "chip"); c.setAttribute("translate", "no");
     if (r.kid) c.append(babyIcon());
     c.append(r.name);
     if (me && r.id === me.rosterId) c.append(el("span", "you", "you"));
     else if (myKidRoster.has(r.id)) c.append(el("span", "you", "yours"));
     ppl.append(c); });
   const kids = S.roster.filter(r => r.kid).length, adults = S.roster.length - kids;
-  $("peopleHint").textContent = S.roster.length ? adults + (adults === 1 ? " adult" : " adults") + (kids ? " and " + kids + (kids === 1 ? " kid" : " kids") : "") + " so far." : "Nobody has joined yet. Be the first!";
+  $("peopleHint").textContent = !S.roster.length ? t("Nobody has joined yet. Be the first!") : kids ? t(adults === 1 ? (kids === 1 ? "{a} adult and {k} kid so far." : "{a} adult and {k} kids so far.") : (kids === 1 ? "{a} adults and {k} kid so far." : "{a} adults and {k} kids so far."), { a: adults, k: kids }) : t(adults === 1 ? "{a} adult so far." : "{a} adults so far.", { a: adults });
 
   renderMatch();
 }
@@ -249,8 +252,8 @@ function renderKids(){
     let row = list.querySelector('[data-id="' + k.id + '"]');
     if (!row) {
       row = el("div", "kidrow"); row.dataset.id = k.id;
-      const head = el("span", "label namewithicon"); head.append(babyIcon(), k.name + "'s wishlist"); row.append(head);
-      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = "Age, sizes, favorite characters, what they already have…"; ta.setAttribute("aria-label", k.name + "'s wishlist");
+      const head = el("span", "label namewithicon"); head.append(babyIcon(), t("{name}'s wishlist", { name: k.name })); row.append(head);
+      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = "Age, sizes, favorite characters, what they already have…"; ta.setAttribute("aria-label", t("{name}'s wishlist", { name: k.name }));
       const st = el("p", "hint", "Saves as you type.");
       ta.addEventListener("input", () => saveWish(k.wishId, ta.value, st));
       row.append(ta, st); list.append(row);
@@ -272,22 +275,22 @@ function renderMatch(){
   gifts.forEach((gft, i) => {
     const t = el("div", "tag");
     t.append(el("span", "label", gft.kid ? (i ? "You're also buying for a kid" : "You're buying for a kid") : "You're buying a gift for"));
-    const to = el("span", "to", gft.name); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
+    const to = el("span", "to", gft.name); to.setAttribute("translate", "no"); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
     const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
-    if (lim) t.append(el("span", "hint", "Spending limit " + lim));
+    if (lim) t.append(el("span", "hint", tr("Spending limit {amount}", { amount: lim })));
     if (S.game.virtual) {
       const ml = el("span", "label", "Mail it to"); ml.style.marginTop = "10px"; t.append(ml);
       const a = S.addresses[gft.wishId];
       if (a) {
-        const card = el("div", "addrcard"); card.textContent = labelLines(a).join("\n"); t.append(card);
+        const card = el("div", "addrcard"); card.setAttribute("translate", "no"); card.textContent = labelLines(a).join("\n"); t.append(card);
         const cp = el("button", "small", "Copy address"); cp.type = "button";
         cp.onclick = async () => { try { await navigator.clipboard.writeText(labelLines(a).join("\n")); cp.textContent = "Copied"; } catch (e) { cp.textContent = "Couldn't copy"; } setTimeout(() => cp.textContent = "Copy address", 1800); };
         const r = el("div", "row"); r.append(cp); t.append(r);
-      } else t.append(el("p", "wish none", (gft.kid ? "Their parent hasn't" : "They haven't") + " added a mailing address yet. Check back soon."));
+      } else t.append(el("p", "wish none", tr(gft.kid ? "Their parent hasn't added a mailing address yet. Check back soon." : "They haven't added a mailing address yet. Check back soon.")));
     }
     const lab = el("span", "label", gft.kid ? "Their wishlist (from their parent)" : "Their wishlist"); lab.style.marginTop = "10px"; t.append(lab);
     const w = S.wishes[gft.wishId], txt = w && w.wishlist && w.wishlist.trim();
-    t.append(el("p", "wish" + (txt ? "" : " none"), txt || "No wishlist yet. Check back later."));
+    const wp = el("p", "wish" + (txt ? "" : " none"), txt || tr("No wishlist yet. Check back later.")); if (txt) wp.setAttribute("translate", "no"); t.append(wp);
     box.append(t);
   });
 }
@@ -337,7 +340,7 @@ $("joinForm").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("joinName").value.trim().replace(/\s+/g, " ");
   if (!name) { msg("joinMsg", "err", "Type your name first."); return; }
-  if (nameTaken(name)) { msg("joinMsg", "err", name + " is already on the list. Add a last initial, or open your personal link if that's you."); return; }
+  if (nameTaken(name)) { msg("joinMsg", "err", t("{name} is already on the list. Add a last initial, or open your personal link if that's you.", { name })); return; }
   $("joinBtn").disabled = true; msg("joinMsg", "", "");
   const secret = randomId(), wishId = randomId(), rosterId = randomId(16), joinedAt = new Date().toISOString();
   const b = writeBatch(db);
@@ -359,19 +362,19 @@ $("kidForm").addEventListener("submit", e => {
   const name = $("kidName").value.trim().replace(/\s+/g, " ");
   if (!name) { msg("kidMsg", "err", "Type your child's name first."); return; }
   const n = normName(name);
-  if (S.kids.some(k => normName(k.name) === n)) { msg("kidMsg", "err", "You've already added " + name + "."); return; }
+  if (S.kids.some(k => normName(k.name) === n)) { msg("kidMsg", "err", t("You've already added {name}.", { name })); return; }
   const same = S.roster.find(r => normName(r.name) === n);
   if (same) {
     msg("kidMsg", "err", same.kid
-      ? name + " is already on the list" + (same.parentName ? ", added by " + same.parentName : "") + ". If that's the same child, you're all set. If not, add a last initial to tell them apart."
-      : "Someone named " + same.name + " is already on the list. Add a last initial to tell them apart.");
+      ? (same.parentName ? t("{name} is already on the list, added by {parent}. If that's the same child, you're all set. If not, add a last initial to tell them apart.", { name, parent: same.parentName }) : t("{name} is already on the list. If that's the same child, you're all set. If not, add a last initial to tell them apart.", { name }))
+      : t("Someone named {name} is already on the list. Add a last initial to tell them apart.", { name: same.name }));
     return;
   }
   // Same first name as a kid someone else added? Ask before adding.
   const similar = S.roster.find(r => r.kid && firstName(r.name) === firstName(name));
   if (similar) {
     pendingKid = name;
-    $("kidConfirmText").textContent = "There's already a kid named " + similar.name + " on the list" + (similar.parentName ? ", added by " + similar.parentName : "") + ". Is that the same child as " + name + "?";
+    $("kidConfirmText").textContent = similar.parentName ? t("There's already a kid named {other} on the list, added by {parent}. Is that the same child as {name}?", { other: similar.name, parent: similar.parentName, name }) : t("There's already a kid named {other} on the list. Is that the same child as {name}?", { other: similar.name, name });
     $("kidConfirm").hidden = false; msg("kidMsg", "", "");
     return;
   }
@@ -389,12 +392,12 @@ async function addKid(name){
   b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt: createdAt, kid: true, parentName: S.me.name });
   const myAddr = S.addresses[S.me.wishId];
   if (S.game.virtual && myAddr) b.set(doc(db, "groups", GID, "addresses", wishId), kidAddress(myAddr, name));
-  showLoading("Adding " + name + " to Santa's list…");
+  showLoading(t("Adding {name} to Santa's list…", { name }));
   try { await b.commit(); $("kidName").value = ""; }
   catch (err) {
     msg("kidMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't add a child now."
-      : err && err.code === "permission-denied" ? name + " was just added by someone else. If that's a different child, add a last initial."
-      : "Couldn't add " + name + ". Check your connection and try again.");
+      : err && err.code === "permission-denied" ? t("{name} was just added by someone else. If that's a different child, add a last initial.", { name })
+      : t("Couldn't add {name}. Check your connection and try again.", { name }));
   }
   finally { hideLoading(); }
   $("kidBtn").disabled = false;
@@ -487,16 +490,16 @@ $("addrForm").addEventListener("submit", async e => {
     if (exactlySame(a, best)) { await saveAddress(a, true); return; }
     const opts = r.suggestions.map((sug, i) => {
       const merged = { ...a, line1: sug.line1, city: sug.city, state: sug.state, zip: /^\d{5}-?\d{4}$/.test(a.zip) && a.zip.slice(0, 5) === sug.zip ? a.zip : sug.zip };
-      return { title: (i === 0 ? "Use suggested: " : "Use: ") + oneLine(merged), detail: i === 0 ? "Standard mailing format" : "", primary: i === 0, onPick: () => saveAddress(merged, true) };
+      return { title: t(i === 0 ? "Use suggested: {address}" : "Use: {address}", { address: oneLine(merged) }), detail: i === 0 ? "Standard mailing format" : "", primary: i === 0, onPick: () => saveAddress(merged, true) };
     });
-    opts.push({ title: "Keep what I typed: " + oneLine(a), onPick: () => saveAddress(a, sameAddress(a, best)) });
+    opts.push({ title: t("Keep what I typed: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, sameAddress(a, best)) });
     offer(r.suggestions.length > 1 ? "We found a few possible matches. Which should we mail to?" : "We found this address in US records. The suggested version is the best one to use for mailing.", opts);
   } else if (r.status === "nomatch") {
     offer("We couldn't find this address in US address records. Check the house number, street name and ZIP code. If it's correct (new homes sometimes aren't listed yet), you can save it anyway.",
-      [{ title: "Save anyway: " + oneLine(a), onPick: () => saveAddress(a, false) }]);
+      [{ title: t("Save anyway: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, false) }]);
   } else {
     offer("We couldn't check the address right now. You can save it as typed and check again later.",
-      [{ title: "Save as typed: " + oneLine(a), onPick: () => saveAddress(a, false) }]);
+      [{ title: t("Save as typed: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, false) }]);
   }
 });
 </script>

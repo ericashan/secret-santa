@@ -5,8 +5,8 @@
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Secret Santa Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041028">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css?v=202610041039">
 </head>
 <body>
 <div class="wrap">
@@ -29,7 +29,7 @@
       <h2>Invite your family</h2>
       <div class="panel">
         <p class="hint">Send everyone this link. They join with just their name, and parents add their kids from their own page. Playing too? Open the link and join like everyone else.</p>
-        <div class="linkbox" id="inviteLink"></div>
+        <div class="linkbox" id="inviteLink" translate="no"></div>
         <div class="row">
           <button type="button" class="small" id="shareInvite" hidden>Share…</button>
           <a class="button small" id="textInvite" href="#">Text it</a>
@@ -133,13 +133,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText,
          canShare, shareInvite, smsHref, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041028";
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041039";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
-import { drawAll } from "./draw.js?v=202610041028";
-import { babyIcon } from "./icons.js?v=202610041028";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041039";
+import { drawAll } from "./draw.js?v=202610041039";
+import { babyIcon } from "./icons.js?v=202610041039";
 window.__ssReady = true;
+import { t, startTranslating, locale } from "./i18n.js?v=202610041039";
+startTranslating();
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
 if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }
@@ -204,9 +206,9 @@ async function openOrganizer(user){
   $("signedOut").hidden = true;
   const gs = await getDoc(doc(db, "groups", GID));
   if (!gs.exists()) { fatal("This group doesn't exist. It may have been deleted."); return; }
-  if (gs.data().ownerUid !== user.uid) { $("signedOut").hidden = false; msg("authMsg", "err", (user.email || "This account") + " isn't the organizer of this group. Sign out and use the Google account that created it."); return; }
+  if (gs.data().ownerUid !== user.uid) { $("signedOut").hidden = false; msg("authMsg", "err", t("{who} isn't the organizer of this group. Sign out and use the Google account that created it.", { who: user.email || t("This account") })); return; }
   rememberGroup(GID, { organizer: true, groupName: gs.data().ev });
-  $("who").textContent = "Signed in as " + user.email;
+  $("who").textContent = t("Signed in as {who}", { who: user.email });
   $("app").hidden = false;
   unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); updateTextLink(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
   unsubs.push(onSnapshot(G("public", "photo"), s => showPhoto(s.exists() ? s.data().data : null), () => {}));
@@ -254,9 +256,9 @@ function render(){
     });
   });
   const vols = ids.filter(id => S.people[id].kidVolunteer).length;
-  $("peopleHint").textContent = ids.length
-    ? ids.length + (ids.length === 1 ? " adult" : " adults") + (kids.length ? ", " + kids.length + (kids.length === 1 ? " kid" : " kids") + ", " + vols + (vols === 1 ? " volunteer" : " volunteers") + " for kid gifts" : "") + "."
-    : "Nobody has joined yet. Send the invite link above.";
+  $("peopleHint").textContent = !ids.length ? t("Nobody has joined yet. Send the invite link above.")
+    : kids.length ? t("Adults: {a} · Kids: {k} · Volunteers for kid gifts: {v}", { a: ids.length, k: kids.length, v: vols })
+    : t("Adults: {a}", { a: ids.length });
 
   ["exA", "exB"].forEach(id => { const sel = $(id), v = sel.value; sel.textContent = ""; ids.forEach(p => { const o = el("option", null, nameOf(p)); o.value = p; sel.append(o); }); if (ids.includes(v)) sel.value = v; });
   if ($("exA").value && $("exA").value === $("exB").value) { const o = ids.find(i => i !== $("exA").value); if (o) $("exB").value = o; }
@@ -270,13 +272,14 @@ function render(){
 
   $("lockDot").classList.toggle("locked", !!g.drawn);
   $("lockText").textContent = g.drawn
-    ? "Locked. Names were drawn " + new Date(g.drawnAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ". Nobody can join or change the matches."
-    : ids.length < 3 ? "Waiting for at least 3 adults to join." : "Ready to draw for " + ids.length + " adults" + (kids.length ? " and " + kids.length + (kids.length === 1 ? " kid" : " kids") : "") + ".";
+    ? t("Locked. Names were drawn {when}. Nobody can join or change the matches.", { when: new Date(g.drawnAt).toLocaleString(locale, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) })
+    : ids.length < 3 ? t("Waiting for at least 3 adults to join.")
+    : kids.length ? t("Ready to draw for {a} adults and {k} kids.", { a: ids.length, k: kids.length }) : t("Ready to draw for {a} adults.", { a: ids.length });
   $("kidPlan").textContent = !g.drawn && kids.length
-    ? kids.length + (kids.length === 1 ? " adult" : " adults") + " will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above."
-    : "";
+    ? t(kids.length === 1 ? "1 adult will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above." : "{n} adults will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above.", { n: kids.length })
+    : "";;
   const noAddr = g.virtual ? ids.filter(id => S.addr[id] === false).length : 0;
-  if (!g.drawn && noAddr) $("kidPlan").textContent = (noAddr === 1 ? "1 person hasn't" : noAddr + " people haven't") + " added a mailing address yet. You can still draw; they can add it afterward. " + $("kidPlan").textContent;
+  if (!g.drawn && noAddr) $("kidPlan").textContent = t(noAddr === 1 ? "1 person hasn't added a mailing address yet. You can still draw; they can add it afterward." : "{n} people haven't added a mailing address yet. You can still draw; they can add it afterward.", { n: noAddr }) + " " + $("kidPlan").textContent;
   $("kidPlan").hidden = !$("kidPlan").textContent;
   $("drawArea").hidden = !!g.drawn; $("resetArea").hidden = !g.drawn;
   $("drawBtn").disabled = ids.length < 3;
@@ -302,7 +305,7 @@ $("addEx").onclick = () => { const a = $("exA").value, b = $("exB").value; if (!
 
 async function removePerson(id){
   const p = S.people[id]; if (!p) return;
-  showLoading("Taking " + p.name + " off the list…");
+  showLoading(t("Taking {name} off the list…", { name: p.name }));
   try {
     const ks = await getDocs(GC("people", id, "kids"));
     const b = writeBatch(db);
@@ -310,14 +313,14 @@ async function removePerson(id){
     b.delete(G("people", id)); b.delete(G("wishes", p.wishId)); b.delete(G("roster", p.rosterId));
     await b.commit();
     saveExcl(S.excl.filter(q => !q.includes(id)));
-  } catch(e){ msg("drawMsg", "err", "Couldn't remove " + p.name + ". Try again."); }
+  } catch(e){ msg("drawMsg", "err", t("Couldn't remove {name}. Try again.", { name: p.name })); }
   finally { hideLoading(); }
 }
 async function removeKid(parent, k){
-  showLoading("Taking " + k.name + " off the list…");
+  showLoading(t("Taking {name} off the list…", { name: k.name }));
   const b = writeBatch(db);
   b.delete(G("people", parent, "kids", k.id)); b.delete(G("wishes", k.wishId)); b.delete(G("roster", k.rosterId));
-  try { await b.commit(); } catch(e){ msg("drawMsg", "err", "Couldn't remove " + k.name + ". Try again."); }
+  try { await b.commit(); } catch(e){ msg("drawMsg", "err", t("Couldn't remove {name}. Try again.", { name: k.name })); }
   finally { hideLoading(); }
 }
 
@@ -338,7 +341,7 @@ $("drawBtn").onclick = async () => {
     b.set(G("matches", id), { gifts });
   });
   b.set(doc(db, "groups", GID), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
-  try { await b.commit(); msg("drawMsg", "ok", "Names drawn for " + adults.length + " adults" + (kids.length ? " and " + kids.length + (kids.length === 1 ? " kid" : " kids") : "") + ". Everyone can open their personal link to see their match."); }
+  try { await b.commit(); msg("drawMsg", "ok", kids.length ? t("Names drawn for {a} adults and {k} kids. Everyone can open their personal link to see their match.", { a: adults.length, k: kids.length }) : t("Names drawn for {a} adults. Everyone can open their personal link to see their match.", { a: adults.length })); }
   catch (e) { msg("drawMsg", "err", "The draw didn't finish. Try again."); }
   finally { hideLoading(); }
   render();

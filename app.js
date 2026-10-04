@@ -2,7 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js?v=202610041028";
+import { t, locale } from "./i18n.js?v=202610041039";
+import { firebaseConfig } from "./firebase-config.js?v=202610041039";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -14,10 +15,10 @@ export const $ = id => document.getElementById(id);
 export function el(tag, cls, text){ const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 export function msg(id, kind, text){ const m = $(id); m.className = "msg " + kind; m.textContent = text; m.hidden = !text; }
 export function randomId(n = 24){ const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"; const r = crypto.getRandomValues(new Uint8Array(n)); return Array.from(r, x => a[x % a.length]).join(""); }
-export function fmtDate(d){ if (!d) return ""; const t = new Date(d + "T12:00:00"); return isNaN(t) ? d : t.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
+export function fmtDate(d){ if (!d) return ""; const dt = new Date(d + "T12:00:00"); return isNaN(dt) ? d : dt.toLocaleDateString(locale, { weekday: "short", month: "short", day: "numeric", year: "numeric" }); }
 export async function copyText(text, btn, label){
-  try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; }
-  catch (e) { btn.textContent = "Couldn't copy"; }
+  try { await navigator.clipboard.writeText(text); btn.textContent = t("Copied"); }
+  catch (e) { btn.textContent = t("Couldn't copy"); }
   setTimeout(() => btn.textContent = label, 1800);
 }
 const siteBase = () => location.origin + location.pathname.replace(/[^/]*$/, "");
@@ -43,10 +44,10 @@ export async function signInWithGoogle(){
 }
 export const signOutNow = () => signOut(auth);
 export function signInError(e){
-  if (e && e.code === "auth/unauthorized-domain") return "This website isn't approved for Google sign-in yet. In Firebase, add it under Authentication → Settings → Authorized domains.";
-  if (e && (e.code === "auth/popup-blocked" || e.code === "auth/cancelled-popup-request")) return "Your browser blocked the sign-in window. Allow pop-ups for this site and try again.";
-  if (e && e.code === "auth/popup-closed-by-user") return "Sign-in was closed before it finished.";
-  return "Sign-in didn't finish. Try again.";
+  if (e && e.code === "auth/unauthorized-domain") return t("This website isn't approved for Google sign-in yet. In Firebase, add it under Authentication → Settings → Authorized domains.");
+  if (e && (e.code === "auth/popup-blocked" || e.code === "auth/cancelled-popup-request")) return t("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
+  if (e && e.code === "auth/popup-closed-by-user") return t("Sign-in was closed before it finished.");
+  return t("Sign-in didn't finish. Try again.");
 }
 
 // ---------- My groups ----------
@@ -98,7 +99,7 @@ export async function syncAccount(user){
 }
 
 // ---------- Sharing ----------
-export const inviteText = name => "Join our Secret Santa" + (name ? ": " + name : "") + "! Open this link and add your name:";
+export const inviteText = name => name ? t("Join our Secret Santa: {name}! Open this link and add your name:", { name }) : t("Join our Secret Santa! Open this link and add your name:");
 export const canShare = () => typeof navigator.share === "function";
 // Opens the phone's share sheet (Messages, WhatsApp, email…). Returns false if it isn't available.
 export async function shareInvite(name, url){
@@ -127,8 +128,8 @@ export async function photoToDataUrl(file, maxSide = 1000){
   } finally { URL.revokeObjectURL(url); }
 }
 export function photoError(e){
-  if (e && e.message === "not-image") return "That file isn't a photo. Pick a JPG, PNG or similar image.";
-  if (e && e.message === "unreadable") return "This browser can't read that photo format. Try a JPG or PNG, or a screenshot of it.";
-  if (e && e.message === "too-big") return "That photo is too detailed to save. Try a different one.";
-  return "Couldn't save the photo. Check your connection and try again.";
+  if (e && e.message === "not-image") return t("That file isn't a photo. Pick a JPG, PNG or similar image.");
+  if (e && e.message === "unreadable") return t("This browser can't read that photo format. Try a JPG or PNG, or a screenshot of it.");
+  if (e && e.message === "too-big") return t("That photo is too detailed to save. Try a different one.");
+  return t("Couldn't save the photo. Check your connection and try again.");
 }

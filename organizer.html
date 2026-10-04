@@ -1,0 +1,227 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secret Santa Organizer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>Organizer</h1>
+    <p class="hint">Only the organizer's Google account can use this page.</p>
+  </header>
+
+  <p id="fatal" class="msg err" hidden></p>
+
+  <div id="signedOut" class="panel" hidden>
+    <button class="primary" id="signIn" type="button">Sign in with Google</button>
+    <p id="authMsg" class="msg err" hidden></p>
+  </div>
+
+  <div id="app" hidden style="display:flex;flex-direction:column;gap:26px">
+    <div class="row"><span class="hint" id="who"></span><button class="ghost" id="signOut" type="button">Sign out</button></div>
+
+    <section>
+      <h2>Invite your family</h2>
+      <div class="panel">
+        <p class="hint">Send everyone this link. They join with just their name.</p>
+        <div class="linkbox" id="inviteLink"></div>
+        <div class="row"><button type="button" class="small" id="copyInvite">Copy invite link</button></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Group details</h2>
+      <div class="panel">
+        <div class="grid3">
+          <div class="field"><label class="label" for="evName">Group name</label><input id="evName" placeholder="Family Christmas 2026" maxlength="60"></div>
+          <div class="field"><label class="label" for="evBudget">Spending limit</label><input id="evBudget" placeholder="$30" maxlength="20"></div>
+          <div class="field"><label class="label" for="evDate">Exchange date</label><input id="evDate" type="date"></div>
+        </div>
+        <p class="hint" id="saveStatus">Changes save automatically.</p>
+      </div>
+    </section>
+
+    <section>
+      <h2>People</h2>
+      <div class="panel">
+        <p class="hint">If someone loses their personal link, copy it here and send it to them again.</p>
+        <div class="list" id="people"></div>
+        <p class="hint" id="peopleHint"></p>
+      </div>
+    </section>
+
+    <section>
+      <h2>Who shouldn't draw whom</h2>
+      <div class="panel">
+        <p class="hint">Optional. For couples or people who live together. The rule works both ways.</p>
+        <div class="excl">
+          <select id="exA" aria-label="First person"></select><span>and</span>
+          <select id="exB" aria-label="Second person"></select>
+          <button type="button" id="addEx">Add rule</button>
+        </div>
+        <div class="chips" id="exChips"></div>
+      </div>
+    </section>
+
+    <section>
+      <h2>The draw</h2>
+      <div class="panel">
+        <span class="status"><span class="dot" id="lockDot"></span><span id="lockText"></span></span>
+        <div id="drawArea" class="row"><button class="primary" id="drawBtn" type="button">Draw names and lock</button></div>
+        <div id="resetArea" hidden>
+          <button type="button" id="resetBtn">Start over</button>
+          <div class="confirm" id="resetConfirm" hidden>
+            <span>This erases everyone's match and reopens joining. Anyone who already looked will get a new person.</span>
+            <div class="row"><button class="primary" type="button" id="resetYes">Yes, erase matches</button><button type="button" id="resetNo">Cancel</button></div>
+          </div>
+        </div>
+        <p id="drawMsg" class="msg" hidden></p>
+        <p class="hint">This page never shows you who has whom.</p>
+      </div>
+    </section>
+  </div>
+
+  <footer><a href="./">Back to the group page</a></footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const $ = id => document.getElementById(id);
+function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
+if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("Add your Firebase settings to firebase-config.js first (SETUP.md, step 4)."); throw new Error("not configured"); }
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app), auth = getAuth(app);
+const base = location.origin + location.pathname.replace(/organizer\.html$/, "");
+const S = { game: {}, people: {}, excl: [] };
+let unsubs = [];
+
+function msg(id, kind, text){ const m = $(id); m.className = "msg " + kind; m.textContent = text; m.hidden = !text; }
+const nameOf = s => (S.people[s] && S.people[s].name) || "Someone";
+async function copy(text, btn, label){ try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; } catch(e){ btn.textContent = "Couldn't copy"; } setTimeout(() => btn.textContent = label, 1800); }
+
+$("inviteLink").textContent = base;
+$("copyInvite").onclick = () => copy(base, $("copyInvite"), "Copy invite link");
+$("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch(e){ msg("authMsg", "err", e.code === "auth/unauthorized-domain" ? "This website isn't approved for sign-in yet. Add it under Authentication → Settings → Authorized domains (SETUP.md, step 6)." : "Sign-in didn't finish. Try again."); } };
+$("signOut").onclick = () => signOut(auth);
+
+onAuthStateChanged(auth, async user => {
+  unsubs.forEach(u => u()); unsubs = [];
+  $("app").hidden = true;
+  if (!user) { $("signedOut").hidden = false; return; }
+  $("signedOut").hidden = true;
+  try { await getDoc(doc(db, "admin", "settings")); }
+  catch (e) { $("signedOut").hidden = false; msg("authMsg", "err", user.email + " isn't the organizer for this group. Sign out and use the organizer's Google account."); await signOut(auth); return; }
+  $("who").textContent = "Signed in as " + user.email;
+  $("app").hidden = false;
+  const g = await getDoc(doc(db, "config", "game"));
+  if (!g.exists()) await setDoc(doc(db, "config", "game"), { ev: "", budget: "", date: "", drawn: false, drawnAt: null });
+  unsubs.push(onSnapshot(doc(db, "config", "game"), s => { S.game = s.data() || {}; render(); }));
+  unsubs.push(onSnapshot(doc(db, "admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
+  unsubs.push(onSnapshot(collection(db, "people"), s => { const p = {}; s.docs.forEach(d => p[d.id] = d.data()); S.people = p; render(); }));
+});
+
+function setVal(id, v){ const el = $(id); if (document.activeElement !== el && el.value !== (v || "")) el.value = v || ""; }
+function render(){
+  const g = S.game, ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  setVal("evName", g.ev); setVal("evBudget", g.budget); setVal("evDate", g.date);
+
+  const list = $("people"); list.textContent = "";
+  ids.forEach(id => {
+    const it = document.createElement("div"); it.className = "item";
+    const w = document.createElement("span"); w.className = "who"; w.textContent = nameOf(id);
+    const row = document.createElement("div"); row.className = "row";
+    const c = document.createElement("button"); c.type = "button"; c.className = "small"; c.textContent = "Copy their link";
+    c.onclick = () => copy(base + "#" + id, c, "Copy their link");
+    row.append(c);
+    if (!g.drawn) { const r = document.createElement("button"); r.type = "button"; r.className = "small ghost"; r.textContent = "Remove"; r.onclick = () => removePerson(id); row.append(r); }
+    it.append(w, row); list.append(it);
+  });
+  $("peopleHint").textContent = ids.length ? ids.length + (ids.length === 1 ? " person has" : " people have") + " joined." : "Nobody has joined yet. Send the invite link above.";
+
+  ["exA", "exB"].forEach(id => { const sel = $(id), v = sel.value; sel.textContent = ""; ids.forEach(p => { const o = document.createElement("option"); o.value = p; o.textContent = nameOf(p); sel.append(o); }); if (ids.includes(v)) sel.value = v; });
+  if ($("exA").value && $("exA").value === $("exB").value) { const o = ids.find(i => i !== $("exA").value); if (o) $("exB").value = o; }
+  const ex = $("exChips"); ex.textContent = "";
+  S.excl.filter(p => S.people[p[0]] && S.people[p[1]]).forEach(p => {
+    const c = document.createElement("span"); c.className = "chip"; c.append(nameOf(p[0]) + " ↔ " + nameOf(p[1]));
+    if (!g.drawn) { c.classList.add("removable"); const b = document.createElement("button"); b.type = "button"; b.textContent = "×"; b.setAttribute("aria-label", "Remove rule"); b.onclick = () => saveExcl(S.excl.filter(q => !(q[0] === p[0] && q[1] === p[1]))); c.append(b); }
+    ex.append(c);
+  });
+  $("exA").disabled = $("exB").disabled = $("addEx").disabled = !!g.drawn;
+
+  $("lockDot").classList.toggle("locked", !!g.drawn);
+  $("lockText").textContent = g.drawn
+    ? "Locked. Names were drawn " + new Date(g.drawnAt).toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }) + ". Nobody can join or change the matches."
+    : ids.length < 3 ? "Waiting for at least 3 people to join." : "Ready to draw for " + ids.length + " people.";
+  $("drawArea").hidden = !!g.drawn; $("resetArea").hidden = !g.drawn;
+  $("drawBtn").disabled = ids.length < 3;
+}
+
+// Group details: save after a pause in typing.
+let sTimer = null;
+["evName", "evBudget", "evDate"].forEach(id => $(id).addEventListener("input", () => {
+  $("saveStatus").textContent = "Saving…"; clearTimeout(sTimer);
+  sTimer = setTimeout(async () => {
+    try { await setDoc(doc(db, "config", "game"), { ev: $("evName").value.trim(), budget: $("evBudget").value.trim(), date: $("evDate").value }, { merge: true }); $("saveStatus").textContent = "Saved."; }
+    catch (e) { $("saveStatus").textContent = "Couldn't save. Check your connection and try again."; }
+  }, 700);
+}));
+
+async function saveExcl(list){ try { await setDoc(doc(db, "admin", "settings"), { excl: list.map(p => p.join("|")) }, { merge: true }); } catch(e){ msg("drawMsg", "err", "Couldn't save that rule. Try again."); } }
+$("addEx").onclick = () => { const a = $("exA").value, b = $("exB").value; if (!a || !b || a === b) return;
+  if (S.excl.some(p => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a))) return; saveExcl(S.excl.concat([[a, b]])); };
+
+async function removePerson(id){
+  const p = S.people[id]; if (!p) return;
+  const b = writeBatch(db);
+  b.delete(doc(db, "people", id)); b.delete(doc(db, "wishes", p.wishId)); b.delete(doc(db, "roster", p.rosterId));
+  try { await b.commit(); saveExcl(S.excl.filter(q => !q.includes(id))); } catch(e){ msg("drawMsg", "err", "Couldn't remove " + p.name + ". Try again."); }
+}
+
+function drawPairs(ids, excl){
+  const bad = new Set(excl.flatMap(([a, b]) => [a + "|" + b, b + "|" + a]));
+  for (let t = 0; t < 5000; t++) {
+    const p = ids.slice();
+    for (let i = p.length - 1; i > 0; i--) { const j = crypto.getRandomValues(new Uint32Array(1))[0] % (i + 1); [p[i], p[j]] = [p[j], p[i]]; }
+    if (ids.every((n, i) => p[i] !== n && !bad.has(n + "|" + p[i]))) return ids.map((n, i) => [n, p[i]]);
+  }
+  return null;
+}
+
+$("drawBtn").onclick = async () => {
+  const ids = Object.keys(S.people);
+  const pairs = drawPairs(ids, S.excl.filter(p => S.people[p[0]] && S.people[p[1]]));
+  if (!pairs) { msg("drawMsg", "err", "There's no way to match everyone with these rules. Remove a rule or wait for more people to join."); return; }
+  $("drawBtn").disabled = true; msg("drawMsg", "ok", "Drawing…");
+  const b = writeBatch(db);
+  pairs.forEach(([giver, rec]) => b.set(doc(db, "matches", giver), { name: S.people[rec].name, wishId: S.people[rec].wishId }));
+  b.set(doc(db, "config", "game"), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
+  try { await b.commit(); msg("drawMsg", "ok", "Names drawn for " + pairs.length + " people. Everyone can open the group page to see their match."); }
+  catch (e) { msg("drawMsg", "err", "The draw didn't finish. Try again."); }
+  render();
+};
+$("resetBtn").onclick = () => { $("resetConfirm").hidden = false; $("resetBtn").hidden = true; };
+$("resetNo").onclick = () => { $("resetConfirm").hidden = true; $("resetBtn").hidden = false; };
+$("resetYes").onclick = async () => {
+  try {
+    const m = await getDocs(collection(db, "matches"));
+    const b = writeBatch(db);
+    m.docs.forEach(d => b.delete(d.ref));
+    b.set(doc(db, "config", "game"), { drawn: false, drawnAt: null }, { merge: true });
+    await b.commit();
+    msg("drawMsg", "ok", "Matches erased. Joining is open again and you can draw when ready.");
+  } catch (e) { msg("drawMsg", "err", "Couldn't erase the matches. Try again."); }
+  $("resetConfirm").hidden = true; $("resetBtn").hidden = false;
+};
+</script>
+</body>
+</html>

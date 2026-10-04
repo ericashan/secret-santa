@@ -1,0 +1,73 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Replace with the Gmail address you'll use to organize.
+    function isOrganizer() {
+      return request.auth != null
+        && request.auth.token.email == "YOUR_GMAIL_ADDRESS@gmail.com"
+        && request.auth.token.email_verified == true;
+    }
+
+    function notDrawn() {
+      return !exists(/databases/$(database)/documents/config/game)
+        || get(/databases/$(database)/documents/config/game).data.drawn != true;
+    }
+
+    function shortText(v, max) {
+      return v is string && v.size() > 0 && v.size() <= max;
+    }
+
+    // Group name, budget, date and the lock. Everyone reads; only you change it.
+    match /config/{docId} {
+      allow read: if true;
+      allow write: if isOrganizer();
+    }
+
+    // Organizer-only settings ("who shouldn't draw whom").
+    match /admin/{docId} {
+      allow read, write: if isOrganizer();
+    }
+
+    // One document per person, keyed by their secret personal link.
+    // Only someone who knows the link can open it; nobody can list them except you.
+    match /people/{secret} {
+      allow get: if true;
+      allow list, delete: if isOrganizer();
+      allow create: if notDrawn()
+        && secret.size() >= 20
+        && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'joinedAt'])
+        && shortText(request.resource.data.name, 40);
+    }
+
+    // Wishlists, keyed by a second secret that only the person and their Secret Santa learn.
+    match /wishes/{wishId} {
+      allow get: if true;
+      allow list, delete: if isOrganizer();
+      allow create: if notDrawn()
+        && wishId.size() >= 20
+        && request.resource.data.keys().hasOnly(['name', 'wishlist'])
+        && shortText(request.resource.data.name, 40)
+        && request.resource.data.wishlist is string
+        && request.resource.data.wishlist.size() <= 4000;
+      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist'])
+        && request.resource.data.wishlist is string
+        && request.resource.data.wishlist.size() <= 4000;
+    }
+
+    // Public list of names so everyone can see who has joined.
+    match /roster/{rosterId} {
+      allow read: if true;
+      allow delete: if isOrganizer();
+      allow create: if notDrawn()
+        && request.resource.data.keys().hasOnly(['name', 'joinedAt'])
+        && shortText(request.resource.data.name, 40);
+    }
+
+    // Each person's match, keyed by their secret link. Only you can write these.
+    match /matches/{secret} {
+      allow get: if true;
+      allow list, write: if isOrganizer();
+    }
+  }
+}

@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Secret Santa</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1 id="title">Secret Santa</h1>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <p id="loading" class="hint">Loading your group…</p>
+  <p id="fatal" class="msg err" hidden></p>
+
+  <!-- Your match -->
+  <section id="matchSec" hidden>
+    <h2>Your match</h2>
+    <div class="panel">
+      <div id="matchHidden" class="row">
+        <button class="primary" id="revealBtn" type="button">Reveal who I'm buying for</button>
+        <span class="hint">Make sure nobody's looking at your screen.</span>
+      </div>
+      <div id="matchShown" hidden>
+        <div class="tag" id="tag">
+          <span class="label">You're buying a gift for</span>
+          <span class="to" id="tagTo"></span>
+          <span class="label" style="margin-top:10px">Their wishlist</span>
+          <p class="wish" id="tagWish"></p>
+        </div>
+        <div class="row" style="margin-top:10px"><button class="ghost" id="hideMatch" type="button">Hide</button></div>
+      </div>
+      <p id="noMatch" class="hint" hidden>You joined after names were drawn, so you don't have a match. Ask the organizer.</p>
+    </div>
+  </section>
+
+  <!-- Join -->
+  <section id="joinSec" hidden>
+    <h2>Join the group</h2>
+    <div class="panel">
+      <form id="joinForm" class="row" autocomplete="off">
+        <input id="joinName" placeholder="Your name, as your family knows you" aria-label="Your name" maxlength="40">
+        <button class="primary" type="submit" id="joinBtn">Join</button>
+      </form>
+      <p id="joinMsg" class="msg err" hidden></p>
+      <p class="hint">No account needed. You'll get a personal link to come back to.</p>
+    </div>
+  </section>
+
+  <p id="lateMsg" class="hint" hidden>Names have already been drawn for this group. If you already joined, open your personal link. Lost it? Ask the organizer to send it again.</p>
+
+  <!-- My wishlist -->
+  <section id="wishSec" hidden>
+    <h2 id="hello">Your wishlist</h2>
+    <div class="panel">
+      <div class="field">
+        <label class="label" for="myWish">Gift ideas</label>
+        <textarea id="myWish" placeholder="Sizes, favorite colors, books you want, links, things you don't want…" maxlength="4000"></textarea>
+      </div>
+      <p class="hint" id="wishStatus">Only the person who draws your name sees this. It saves as you type.</p>
+    </div>
+  </section>
+
+  <!-- Personal link -->
+  <section id="linkSec" hidden>
+    <div class="panel">
+      <span class="label">Your personal link</span>
+      <p class="hint">Save this link. It's how you get back to your wishlist and your match on any phone or computer. Don't share it.</p>
+      <div class="linkbox" id="myLink"></div>
+      <div class="row"><button type="button" class="small" id="copyLink">Copy link</button></div>
+    </div>
+  </section>
+
+  <!-- Who's in -->
+  <section id="peopleSec" hidden>
+    <h2>Who's in</h2>
+    <div class="panel">
+      <div class="chips" id="people"></div>
+      <p class="hint" id="peopleHint"></p>
+    </div>
+  </section>
+
+  <footer><a href="organizer.html">Organizer</a></footer>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
+import { getFirestore, doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { firebaseConfig } from "./firebase-config.js";
+
+const $ = id => document.getElementById(id);
+const S = { secret: null, me: null, game: {}, roster: [], myWish: null, match: undefined, matchWish: null, revealed: false };
+const LS = "secret-santa-link";
+
+function fatal(t){ $("loading").hidden = true; const f = $("fatal"); f.textContent = t; f.hidden = false; }
+if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("This page isn't set up yet. The organizer still needs to add the Firebase settings (SETUP.md, step 4)."); throw new Error("not configured"); }
+
+const db = getFirestore(initializeApp(firebaseConfig));
+
+function randomId(n = 24){ const a = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789"; const r = crypto.getRandomValues(new Uint8Array(n)); return Array.from(r, x => a[x % a.length]).join(""); }
+function msg(id, kind, text){ const m = $(id); m.className = "msg " + kind; m.textContent = text; m.hidden = !text; }
+function fmtDate(d){ if(!d) return ""; const t = new Date(d + "T12:00:00"); return isNaN(t) ? d : t.toLocaleDateString(undefined, { weekday:"short", month:"short", day:"numeric", year:"numeric" }); }
+const linkFor = s => location.origin + location.pathname + "#" + s;
+function store(k, v){ try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){} }
+function load(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+
+let gotGame = false, gotRoster = false, gotMe = false;
+
+function render(){
+  if (!gotGame || !gotRoster || !gotMe) return;
+  $("loading").hidden = true;
+  const g = S.game, me = S.me;
+  $("title").textContent = g.ev || "Secret Santa";
+  document.title = g.ev || "Secret Santa";
+  const facts = $("facts"); facts.textContent = "";
+  const fact = (k, v) => { const s = document.createElement("span"); s.className = "fact"; s.append(k + " "); const b = document.createElement("b"); b.textContent = v; s.append(b); facts.append(s); };
+  if (g.budget) fact("Limit", g.budget);
+  if (g.date) fact("Exchange", fmtDate(g.date));
+  fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
+
+  $("joinSec").hidden = !!me || !!g.drawn;
+  $("lateMsg").hidden = !(g.drawn && !me);
+  $("wishSec").hidden = $("linkSec").hidden = !me;
+  $("matchSec").hidden = !(g.drawn && me);
+  if (me) {
+    $("hello").textContent = "Hi " + me.name + "! Your wishlist";
+    $("myLink").textContent = linkFor(S.secret);
+    const ta = $("myWish");
+    if (S.myWish && document.activeElement !== ta && ta.value !== (S.myWish.wishlist || "")) ta.value = S.myWish.wishlist || "";
+  }
+
+  $("peopleSec").hidden = false;
+  const ppl = $("people"); ppl.textContent = "";
+  S.roster.forEach(r => { const c = document.createElement("span"); c.className = "chip"; c.append(r.name);
+    if (me && r.id === me.rosterId) { const y = document.createElement("span"); y.className = "you"; y.textContent = "you"; c.append(y); }
+    ppl.append(c); });
+  $("peopleHint").textContent = S.roster.length ? S.roster.length + (S.roster.length === 1 ? " person has" : " people have") + " joined." : "Nobody has joined yet. Be the first!";
+
+  renderMatch();
+}
+
+function renderMatch(){
+  if (!(S.game.drawn && S.me)) return;
+  const has = !!S.match;
+  $("noMatch").hidden = has || S.match === undefined;
+  $("matchHidden").hidden = !has || S.revealed;
+  $("matchShown").hidden = !has || !S.revealed;
+  if (has && S.revealed) {
+    $("tagTo").textContent = S.match.name;
+    const w = $("tagWish"), txt = S.matchWish && S.matchWish.wishlist && S.matchWish.wishlist.trim();
+    w.textContent = txt || "No wishlist yet. Check back later.";
+    w.classList.toggle("none", !txt);
+  }
+}
+
+// ---------- Subscriptions ----------
+onSnapshot(doc(db, "config", "game"), s => { S.game = s.exists() ? s.data() : {}; gotGame = true; render(); },
+  () => fatal("Couldn't load the group. Check your connection and reload."));
+onSnapshot(collection(db, "roster"), s => { S.roster = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name)); gotRoster = true; render(); },
+  () => fatal("Couldn't load the group. Check your connection and reload."));
+
+let unsubs = [];
+function watchMe(secret){
+  unsubs.forEach(u => u()); unsubs = [];
+  S.secret = secret;
+  if (!secret) { S.me = null; gotMe = true; render(); return; }
+  getDoc(doc(db, "people", secret)).then(s => {
+    if (!s.exists()) { S.me = null; S.secret = null; store(LS, null); if (location.hash) history.replaceState(null, "", location.pathname); gotMe = true; render(); return; }
+    S.me = s.data(); gotMe = true;
+    store(LS, secret);
+    if (location.hash.slice(1) !== secret) history.replaceState(null, "", "#" + secret);
+    unsubs.push(onSnapshot(doc(db, "wishes", S.me.wishId), w => { S.myWish = w.exists() ? w.data() : null; render(); }));
+    let matchWishUnsub = null;
+    unsubs.push(onSnapshot(doc(db, "matches", secret), m => {
+      S.match = m.exists() ? m.data() : null;
+      if (matchWishUnsub) { matchWishUnsub(); matchWishUnsub = null; }
+      S.matchWish = null;
+      if (S.match) matchWishUnsub = onSnapshot(doc(db, "wishes", S.match.wishId), w => { S.matchWish = w.exists() ? w.data() : null; renderMatch(); });
+      render();
+    }));
+    unsubs.push(() => matchWishUnsub && matchWishUnsub());
+    render();
+  }).catch(() => fatal("Couldn't load your details. Check your connection and reload."));
+}
+
+const fromHash = location.hash.slice(1);
+watchMe(/^[A-Za-z0-9]{20,}$/.test(fromHash) ? fromHash : load(LS));
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (/^[A-Za-z0-9]{20,}$/.test(h) && h !== S.secret) { gotMe = false; watchMe(h); } });
+
+// ---------- Actions ----------
+$("joinForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("joinName").value.trim().replace(/\s+/g, " ");
+  if (!name) { msg("joinMsg", "err", "Type your name first."); return; }
+  if (S.roster.some(r => r.name.toLowerCase() === name.toLowerCase())) { msg("joinMsg", "err", name + " is already on the list. Add a last initial, or open your personal link if that's you."); return; }
+  $("joinBtn").disabled = true; msg("joinMsg", "", "");
+  const secret = randomId(), wishId = randomId(), rosterId = randomId(16), joinedAt = new Date().toISOString();
+  const b = writeBatch(db);
+  b.set(doc(db, "people", secret), { name, wishId, rosterId, joinedAt });
+  b.set(doc(db, "wishes", wishId), { name, wishlist: "" });
+  b.set(doc(db, "roster", rosterId), { name, joinedAt });
+  try { await b.commit(); gotMe = false; watchMe(secret); }
+  catch (err) { msg("joinMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't join now." : "Couldn't join just now. Check your connection and try again."); }
+  $("joinBtn").disabled = false;
+});
+
+let wTimer = null, wBusy = false, wNext = null;
+async function flushWish(){ if (wBusy) return; wBusy = true;
+  while (wNext !== null) { const v = wNext; wNext = null;
+    try { await updateDoc(doc(db, "wishes", S.me.wishId), { wishlist: v }); $("wishStatus").textContent = "Saved. Only the person who draws your name sees this."; }
+    catch (e) { $("wishStatus").textContent = "Couldn't save just now. Check your connection and keep typing to try again."; } }
+  wBusy = false; }
+$("myWish").addEventListener("input", () => { $("wishStatus").textContent = "Saving…"; wNext = $("myWish").value; clearTimeout(wTimer); wTimer = setTimeout(flushWish, 700); });
+
+$("copyLink").addEventListener("click", async () => {
+  const b = $("copyLink");
+  try { await navigator.clipboard.writeText(linkFor(S.secret)); b.textContent = "Copied"; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($("myLink")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = "Selected. Copy it now"; }
+  setTimeout(() => b.textContent = "Copy link", 2000);
+});
+$("revealBtn").addEventListener("click", () => { S.revealed = true; renderMatch(); const t = $("tag"); t.classList.remove("show"); void t.offsetWidth; t.classList.add("show"); });
+$("hideMatch").addEventListener("click", () => { S.revealed = false; renderMatch(); });
+</script>
+</body>
+</html>

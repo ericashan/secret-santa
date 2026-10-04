@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041039">
+<link rel="stylesheet" href="style.css?v=202610041044">
 </head>
 <body>
 <div class="wrap">
@@ -14,6 +14,7 @@
     <img id="banner" class="banner" alt="" hidden>
     <h1 id="title">Secret Santa</h1>
     <div class="facts" id="facts"></div>
+    <div id="calSlot"></div>
   </header>
 
   <p id="fatal" class="msg err" hidden></p>
@@ -147,14 +148,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, $, el, msg, randomId, fmtDate, personalLink, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041039";
+import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, homeLink, organizeLink, groupIdFromUrl,
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041044";
 import { doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041039";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041039";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041039";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041044";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041044";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041044";
 window.__ssReady = true;
-import { t, startTranslating } from "./i18n.js?v=202610041039";
+import { calendarButton } from "./calendar.js?v=202610041044";
+import { t, startTranslating } from "./i18n.js?v=202610041044";
 const tr = t;
 startTranslating();
 
@@ -195,6 +197,7 @@ function saveWish(id, value, statusEl){
 }
 function syncTextarea(ta, id){ const w = S.wishes[id]; if (w && document.activeElement !== ta && ta.value !== (w.wishlist || "")) ta.value = w.wishlist || ""; }
 
+let renderedCalKey = null;
 let gotGame = false, gotRoster = false, gotMe = false;
 
 function render(){
@@ -210,6 +213,9 @@ function render(){
   if (g.date) fact("Exchange", fmtDate(g.date));
   if (g.virtual) fact("Gifts", "mailed");
   fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
+  // Add-to-calendar, rebuilt only when the date, name or details change.
+  const calKey = [g.date, g.ev, g.budget, g.virtual].join("|");
+  if (calKey !== renderedCalKey) { renderedCalKey = calKey; $("calSlot").textContent = ""; if (g.date) $("calSlot").append(calendarButton(g, groupLink(GID), GID)); }
 
   $("joinSec").hidden = !!me || !!g.drawn;
   $("lateMsg").hidden = !(g.drawn && !me);

@@ -286,5 +286,13 @@ export default {
   "This group doesn't exist. It may have been deleted.": "이 그룹이 없어요. 삭제되었을 수 있어요.",
   "This group was deleted.": "이 그룹은 삭제되었어요.",
   "{who} isn't the organizer of this group. Sign out and use the Google account that created it.": "{who} 계정은 이 그룹의 주최자가 아니에요. 로그아웃한 뒤 그룹을 만든 Google 계정을 사용해 주세요.",
-  "This account": "이 계정"
+  "This account": "이 계정",
+
+  // ---------- Calendar ----------
+  "Add to calendar": "캘린더에 추가",
+  "Google Calendar": "Google 캘린더",
+  "Apple, Outlook or other": "Apple, Outlook 등 다른 캘린더",
+  "Secret Santa gift exchange: {name}": "시크릿 산타 선물 교환: {name}",
+  "Virtual exchange: gifts should arrive by this date, so mail yours early.": "온라인 교환: 이 날짜까지 선물이 도착해야 하니 미리 보내 주세요.",
+  "Group page: {link}": "그룹 페이지: {link}"
 };

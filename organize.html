@@ -6,7 +6,7 @@
 <title>Secret Santa Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041058">
+<link rel="stylesheet" href="style.css?v=202610041108">
 </head>
 <body>
 <div class="wrap">
@@ -26,7 +26,7 @@
     <div class="row"><span class="hint" id="who"></span><button class="ghost" id="signOut" type="button">Sign out</button></div>
 
     <section>
-      <h2>Invite your family</h2>
+      <h2 id="inviteTitle">Invite your family</h2>
       <div class="panel">
         <p class="hint">Send everyone this link. They join with just their name, and parents add their kids from their own page. Playing too? Open the link and join like everyone else.</p>
         <div class="linkbox" id="inviteLink" translate="no"></div>
@@ -59,8 +59,14 @@
           <div class="field"><label class="label" for="evBudget">Spending limit</label><input id="evBudget" placeholder="$30" maxlength="20"></div>
           <div class="field"><label class="label" for="evKidBudget">Limit for kid gifts</label><input id="evKidBudget" placeholder="$15" maxlength="20"></div>
         </div>
-        <label class="check"><input type="checkbox" id="evVirtual"> Virtual exchange: gifts are mailed</label>
-        <p class="hint">Turn this on and everyone adds a mailing address, which their Secret Santa sees after the draw.</p>
+        <div class="grid2">
+          <div class="field"><label class="label" for="evKind">Who's it for?</label>
+            <select id="evKind"><option value="family">Family</option><option value="friends">Friends</option><option value="coworkers">Coworkers</option><option value="other">Other</option></select></div>
+          <div class="field"><label class="label" for="evFormat">How are people taking part?</label>
+            <select id="evFormat"><option value="inperson">Everyone in person</option><option value="mixed">In person, some virtually</option><option value="virtual">Everyone virtually (mailed)</option></select></div>
+        </div>
+        <p class="hint" id="formatHint"></p>
+        <label class="check"><input type="checkbox" id="evKids"> Include kids (they get a gift but don't buy one)</label>
         <p class="hint" id="saveStatus">Changes save automatically. Leave the kid limit empty to use the main limit.</p>
       </div>
     </section>
@@ -148,18 +154,18 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
+import { configured, db, auth, $, el, msg, formatOf, kindOf, kidsOn, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
          canShare, shareInvite, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041058";
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041108";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041058";
-import { drawAll } from "./draw.js?v=202610041058";
-import { babyIcon } from "./icons.js?v=202610041058";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041108";
+import { drawAll } from "./draw.js?v=202610041108";
+import { babyIcon } from "./icons.js?v=202610041108";
 window.__ssReady = true;
-import { t, startTranslating, locale } from "./i18n.js?v=202610041058";
+import { t, startTranslating, locale } from "./i18n.js?v=202610041108";
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041058";
+import { mountNav } from "./nav.js?v=202610041108";
 mountNav();
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -170,11 +176,11 @@ const G = (...path) => doc(db, "groups", GID, ...path);
 const GC = (...path) => collection(db, "groups", GID, ...path);
 const invite = groupLink(GID);
 $("groupPageLink").href = invite;
-const S = { game: {}, people: {}, kids: {}, excl: [], addr: {}, phones: {} };   // kids: { parentSecret: [kid, ...] }
-let unsubs = [], kidSubs = {}, addrSubs = {};
+const S = { game: {}, people: {}, kids: {}, excl: [], addr: {}, phones: {}, remote: {}, mailTo: {} };   // kids: { parentSecret: [kid, ...] }
+let unsubs = [], kidSubs = {}, addrSubs = {}, wishSubs = {};
 
 const nameOf = s => (S.people[s] && S.people[s].name) || "Someone";
-const allKids = () => Object.entries(S.kids).filter(([p]) => S.people[p]).flatMap(([p, ks]) => ks.map(k => ({ ...k, parent: p })));
+const allKids = () => !kidsOn(S.game) ? [] : Object.entries(S.kids).filter(([p]) => S.people[p]).flatMap(([p, ks]) => ks.map(k => ({ ...k, parent: p })));
 const copy = copyText;
 
 $("inviteLink").textContent = invite;
@@ -206,7 +212,7 @@ $("photoRemove").onclick = async () => {
 $("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithGoogle(); } catch(e){ msg("authMsg", "err", signInError(e)); } };
 $("signOut").onclick = () => signOutNow();
 
-function stopAll(){ unsubs.forEach(u => u()); unsubs = []; Object.values(kidSubs).forEach(u => u()); kidSubs = {}; S.kids = {}; Object.values(addrSubs).forEach(u => u()); addrSubs = {}; S.addr = {}; }
+function stopAll(){ unsubs.forEach(u => u()); unsubs = []; Object.values(kidSubs).forEach(u => u()); kidSubs = {}; S.kids = {}; Object.values(addrSubs).forEach(u => u()); addrSubs = {}; Object.values(wishSubs).forEach(u => u()); wishSubs = {}; S.remote = {}; S.addr = {}; }
 
 let booting = true;
 showLoading("Santa's checking his list…", true);
@@ -228,6 +234,7 @@ async function openOrganizer(user){
   $("who").textContent = t("Signed in as {who}", { who: user.email });
   $("app").hidden = false;
   unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(GC("matches"), s => { const m = {}; s.docs.forEach(d => m[d.id] = !!d.data().mailTo); S.mailTo = m; render(); }, () => {}));
   unsubs.push(onSnapshot(GC("phones"), s => { const ph = {}; s.docs.forEach(d => ph[d.id] = d.data().phone); S.phones = ph; renderTexts(); }, () => {}));
   unsubs.push(onSnapshot(G("public", "photo"), s => showPhoto(s.exists() ? s.data().data : null), () => {}));
   unsubs.push(onSnapshot(G("admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
@@ -239,6 +246,9 @@ async function openOrganizer(user){
         S.kids[sec] = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)); render(); }); });
       Object.keys(kidSubs).forEach(sec => { if (!p[sec]) { kidSubs[sec](); delete kidSubs[sec]; delete S.kids[sec]; } });
       // Whether each person has added a mailing address (for virtual exchanges).
+      // Who is joining virtually (mixed groups) is kept with each person's wishlist.
+      Object.keys(p).forEach(sec => { if (!wishSubs[sec]) wishSubs[sec] = onSnapshot(G("wishes", p[sec].wishId), w => { S.remote[sec] = !!(w.exists() && w.data().remote); render(); }, () => {}); });
+      Object.keys(wishSubs).forEach(sec => { if (!p[sec]) { wishSubs[sec](); delete wishSubs[sec]; delete S.remote[sec]; } });
       Object.keys(p).forEach(sec => { if (!addrSubs[sec]) addrSubs[sec] = onSnapshot(G("addresses", p[sec].wishId), a => { S.addr[sec] = a.exists(); render(); }, () => {}); });
       Object.keys(addrSubs).forEach(sec => { if (!p[sec]) { addrSubs[sec](); delete addrSubs[sec]; delete S.addr[sec]; } });
       render(); resolve();
@@ -251,7 +261,14 @@ function render(){
   renderTexts();
   const g = S.game, ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
   const kids = allKids();
-  if (document.activeElement !== $("evVirtual")) $("evVirtual").checked = !!g.virtual;
+  const fmt = formatOf(g), kind = kindOf(g);
+  if (document.activeElement !== $("evFormat")) $("evFormat").value = fmt;
+  if (document.activeElement !== $("evKind")) $("evKind").value = kind;
+  if (document.activeElement !== $("evKids")) $("evKids").checked = kidsOn(g);
+  $("formatHint").textContent = fmt === "virtual" ? t("Everyone adds a mailing address, which their Secret Santa sees after the draw.")
+    : fmt === "mixed" ? t("Each person chooses in person or virtually. Gifts are mailed whenever the giver or the receiver is virtual, and those people are asked for an address.")
+    : t("Gifts are exchanged in person. Choose a mixed option if some people can't make it.");
+  $("inviteTitle").textContent = t({ family: "Invite your family", friends: "Invite your friends", coworkers: "Invite your coworkers", other: "Invite people" }[kind]);
   setVal("evName", g.ev); setVal("evBudget", g.budget); setVal("evKidBudget", g.kidBudget); setVal("evDate", g.date);
 
   const list = $("people"); list.textContent = "";
@@ -259,7 +276,8 @@ function render(){
     const it = el("div", "item");
     const w = el("span", "who", nameOf(id));
     if (S.people[id].kidVolunteer) { w.append(" "); w.append(el("span", "badge", "will buy for a kid")); }
-    if (g.virtual && S.addr[id] === false) { w.append(" "); w.append(el("span", "badge warn", "no address yet")); }
+    if (fmt === "mixed" && S.remote[id]) { w.append(" "); w.append(el("span", "badge", "joining virtually")); }
+    if (needsAddress(id) && S.addr[id] === false) { w.append(" "); w.append(el("span", "badge warn", "no address yet")); }
     const row = el("div", "row");
     const c = el("button", "small", "Copy their link"); c.type = "button";
     c.onclick = () => copy(personalLink(GID, id), c, "Copy their link");
@@ -297,7 +315,7 @@ function render(){
   $("kidPlan").textContent = !g.drawn && kids.length
     ? t(kids.length === 1 ? "1 adult will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above." : "{n} adults will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above.", { n: kids.length })
     : "";;
-  const noAddr = g.virtual ? ids.filter(id => S.addr[id] === false).length : 0;
+  const noAddr = ids.filter(id => needsAddress(id) && S.addr[id] === false).length;
   if (!g.drawn && noAddr) $("kidPlan").textContent = t(noAddr === 1 ? "1 person hasn't added a mailing address yet. You can still draw; they can add it afterward." : "{n} people haven't added a mailing address yet. You can still draw; they can add it afterward.", { n: noAddr }) + " " + $("kidPlan").textContent;
   $("kidPlan").hidden = !$("kidPlan").textContent;
   $("drawArea").hidden = !!g.drawn; $("resetArea").hidden = !g.drawn;
@@ -306,10 +324,19 @@ function render(){
 
 // Group details: save after a pause in typing.
 let sTimer = null;
-$("evVirtual").addEventListener("change", async () => {
-  try { await setDoc(doc(db, "groups", GID), { virtual: $("evVirtual").checked }, { merge: true }); $("saveStatus").textContent = $("evVirtual").checked ? "Saved. Everyone will be asked for a mailing address." : "Saved."; }
-  catch (e) { $("evVirtual").checked = !$("evVirtual").checked; $("saveStatus").textContent = "Couldn't save. Check your connection and try again."; }
-});
+// Who needs a mailing address: everyone in a virtual group; in a mixed group, people joining
+// virtually and (after the draw) anyone whose Secret Santa is joining virtually.
+function needsAddress(id){
+  const fmt = formatOf(S.game);
+  return fmt === "virtual" || (fmt === "mixed" && (S.remote[id] || S.mailTo[id]));
+}
+async function saveSetting(data, okText){
+  try { await setDoc(doc(db, "groups", GID), data, { merge: true }); $("saveStatus").textContent = okText || t("Saved."); }
+  catch (e) { $("saveStatus").textContent = t("Couldn't save. Check your connection and try again."); render(); }
+}
+$("evFormat").addEventListener("change", () => { const f = $("evFormat").value; saveSetting({ format: f, virtual: f === "virtual" }); });
+$("evKind").addEventListener("change", () => { const k = $("evKind").value; const data = { kind: k }; if (typeof S.game.kids !== "boolean") data.kids = k === "family"; saveSetting(data); });
+$("evKids").addEventListener("change", () => saveSetting({ kids: $("evKids").checked }));
 ["evName", "evBudget", "evKidBudget", "evDate"].forEach(id => $(id).addEventListener("input", () => {
   $("saveStatus").textContent = "Saving…"; clearTimeout(sTimer);
   sTimer = setTimeout(async () => {
@@ -345,6 +372,7 @@ async function removeKid(parent, k){
 
 $("drawBtn").onclick = async () => {
   const adults = Object.keys(S.people).map(id => ({ id, volunteer: !!S.people[id].kidVolunteer }));
+  const mixed = formatOf(S.game) === "mixed";
   const kids = allKids().map(k => ({ id: k.parent + "/" + k.id, parent: k.parent }));
   const excl = S.excl.filter(p => S.people[p[0]] && S.people[p[1]]);
   const result = drawAll(adults, kids, excl);
@@ -357,7 +385,10 @@ $("drawBtn").onclick = async () => {
     const rec = S.people[result.adultPairs[id]];
     const gifts = [{ name: rec.name, wishId: rec.wishId, kid: false }];
     (result.kidGivers[id] || []).forEach(kidId => { const k = kidById[kidId]; gifts.push({ name: k.name, wishId: k.wishId, kid: true }); });
-    b.set(G("matches", id), { gifts });
+    // In a mixed group, anyone whose Secret Santa is virtual (for them or their kid) gets mailed a gift,
+    // so their page asks for an address. It never says who their Secret Santa is.
+    const mailTo = mixed && adults.some(({ id: giver }) => S.remote[giver] && (result.adultPairs[giver] === id || (result.kidGivers[giver] || []).some(kidId => kidById[kidId].parent === id)));
+    b.set(G("matches", id), { gifts, mailTo });
   });
   b.set(doc(db, "groups", GID), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
   try { await b.commit(); msg("drawMsg", "ok", kids.length ? t("Names drawn for {a} adults and {k} kids. Everyone can open their personal link to see their match.", { a: adults.length, k: kids.length }) : t("Names drawn for {a} adults. Everyone can open their personal link to see their match.", { a: adults.length })); }
@@ -396,7 +427,7 @@ const TEMPLATES = [
   { id: "wishlist", label: "Reminder: add your wishlist", show: () => true, text: g => t("Reminder for {group}: add your wishlist so your Secret Santa knows what to get you. {link}", { group: g.ev, link: invite }) },
   { id: "drawn", label: "Names are drawn", show: g => !!g.drawn, text: g => t("Names are drawn for {group}! Open your page to see who you're buying for: {link}", { group: g.ev, link: invite }) },
   { id: "date", label: "Reminder: exchange date", show: g => !!g.date, text: g => t("Reminder: the {group} gift exchange is on {date}.", { group: g.ev, date: fmtDate(g.date) }) + (g.budget ? " " + t("Spending limit: {amount}.", { amount: g.budget }) : "") },
-  { id: "mail", label: "Reminder: mail your gift", show: g => !!(g.virtual && g.drawn), text: g => g.date ? t("Reminder: mail your {group} gift so it arrives by {date}. The address is on your match page: {link}", { group: g.ev, date: fmtDate(g.date), link: invite }) : t("Reminder: mail your {group} gift soon. The address is on your match page: {link}", { group: g.ev, link: invite }) },
+  { id: "mail", label: "Reminder: mail your gift", show: g => !!(formatOf(g) !== "inperson" && g.drawn), text: g => g.date ? t("Reminder: mail your {group} gift so it arrives by {date}. The address is on your match page: {link}", { group: g.ev, date: fmtDate(g.date), link: invite }) : t("Reminder: mail your {group} gift soon. The address is on your match page: {link}", { group: g.ev, link: invite }) },
   { id: "custom", label: "Write my own", show: () => true, text: () => "" }
 ];
 let textEdited = false, lastTemplateKey = "";

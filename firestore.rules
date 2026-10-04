@@ -8,7 +8,7 @@ service cloud.firestore {
     function isOwner(gid) { return signedIn() && groupDoc(gid).ownerUid == request.auth.uid; }
     function notDrawn(gid) { return groupDoc(gid).drawn != true; }
     function shortText(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
-    function groupFields() { return ['ownerUid', 'ev', 'budget', 'kidBudget', 'date', 'drawn', 'drawnAt', 'createdAt', 'virtual']; }
+    function groupFields() { return ['ownerUid', 'ev', 'budget', 'kidBudget', 'date', 'drawn', 'drawnAt', 'createdAt', 'virtual', 'format', 'kind', 'kids']; }
 
     // Each signed-in person's own list of groups. Only they can see it.
     match /users/{uid} {
@@ -78,11 +78,14 @@ service cloud.firestore {
         allow list, delete: if isOwner(gid);
         allow create: if notDrawn(gid)
           && wishId.size() >= 20
-          && request.resource.data.keys().hasOnly(['name', 'wishlist'])
+          && request.resource.data.keys().hasOnly(['name', 'wishlist', 'remote'])
+          && request.resource.data.get('remote', false) is bool
           && shortText(request.resource.data.name, 40)
           && request.resource.data.wishlist is string
           && request.resource.data.wishlist.size() <= 4000;
-        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist'])
+        // The wishlist, and whether this person is joining virtually (so their Secret Santa knows to mail it).
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist', 'remote'])
+          && request.resource.data.get('remote', false) is bool
           && request.resource.data.wishlist is string
           && request.resource.data.wishlist.size() <= 4000;
       }

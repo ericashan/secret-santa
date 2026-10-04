@@ -1,6 +1,6 @@
 // "Add to calendar" for the exchange date: Google Calendar, or a calendar file
 // that Apple Calendar, Outlook and most other calendar apps can open.
-import { t } from "./i18n.js?v=202610041058";
+import { t } from "./i18n.js?v=202610041108";
 
 const ymd = d => d.replace(/-/g, "");
 function nextDay(d){ const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); }
@@ -61,24 +61,46 @@ const ICON = {
 };
 function iconLabel(icon, text){ const f = document.createDocumentFragment(); const i = document.createElement("span"); i.className = "ico"; i.innerHTML = icon; f.append(i, document.createTextNode(text)); return f; }
 
-// The two calendar choices, hidden until the calendar icon is tapped.
-export function calendarMenu(group, link, uidSeed){
-  const ev = eventFor(group, link);
-  const menu = document.createElement("div"); menu.className = "calmenu"; menu.hidden = true;
-  const g = document.createElement("a"); g.className = "button small"; g.href = googleCalendarUrl(ev); g.target = "_blank"; g.rel = "noopener";
-  g.append(iconLabel(ICON.web, t("Google Calendar")));
-  const i = document.createElement("button"); i.type = "button"; i.className = "small";
-  i.append(iconLabel(ICON.download, t("Apple, Outlook or other")));
-  i.onclick = () => downloadIcs(ev, uidSeed);
-  menu.append(g, i);
-  return menu;
-}
-// A calendar icon that sits right on the date and opens the menu.
-export function calendarIcon(menu){
-  const b = document.createElement("button"); b.type = "button"; b.className = "calicon";
-  b.setAttribute("aria-label", t("Add to calendar")); b.title = t("Add to calendar");
-  b.setAttribute("aria-expanded", String(!menu.hidden));
-  b.innerHTML = ICON.calAdd;
-  b.onclick = () => { menu.hidden = !menu.hidden; b.setAttribute("aria-expanded", String(!menu.hidden)); };
-  return b;
+// A calendar icon that sits on the date. Tapping it opens a small pop-up right
+// next to it with the two choices; tapping outside, scrolling or Escape closes it.
+let openPop = null;
+function closePop(){ if (!openPop) return; const { pop, btn, onDoc, onKey, onScroll } = openPop; pop.remove(); btn.setAttribute("aria-expanded", "false");
+  document.removeEventListener("pointerdown", onDoc, true); document.removeEventListener("keydown", onKey); window.removeEventListener("scroll", onScroll, true); window.removeEventListener("resize", onScroll); openPop = null; }
+
+export function calendarIcon(group, link, uidSeed){
+  const btn = document.createElement("button"); btn.type = "button"; btn.className = "calicon";
+  btn.setAttribute("aria-label", t("Add to calendar")); btn.title = t("Add to calendar");
+  btn.setAttribute("aria-haspopup", "true"); btn.setAttribute("aria-expanded", "false");
+  btn.innerHTML = ICON.calAdd;
+  btn.onclick = e => {
+    e.stopPropagation();
+    if (openPop && openPop.btn === btn) { closePop(); return; }
+    closePop();
+    const ev = eventFor(group, link);
+    const pop = document.createElement("div"); pop.className = "calpop"; pop.setAttribute("role", "dialog"); pop.setAttribute("aria-label", t("Add to calendar"));
+    const title = document.createElement("span"); title.className = "label"; title.textContent = t("Add to calendar");
+    const g = document.createElement("a"); g.className = "calopt"; g.href = googleCalendarUrl(ev); g.target = "_blank"; g.rel = "noopener";
+    g.append(iconLabel(ICON.web, t("Google Calendar"))); g.addEventListener("click", () => setTimeout(closePop, 0));
+    const i = document.createElement("button"); i.type = "button"; i.className = "calopt";
+    i.append(iconLabel(ICON.download, t("Apple, Outlook or other")));
+    i.onclick = () => { downloadIcs(ev, uidSeed); closePop(); };
+    pop.append(title, g, i);
+    document.body.append(pop);
+    // Place it just below the icon, kept inside the screen.
+    const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight, gap = 8;
+    let left = Math.min(Math.max(12, r.left + r.width / 2 - w / 2), window.innerWidth - w - 12);
+    let top = r.bottom + gap; if (top + h > window.innerHeight - 12) top = Math.max(12, r.top - h - gap);
+    pop.style.left = left + "px"; pop.style.top = top + "px";
+    pop.style.setProperty("--arrow-x", (r.left + r.width / 2 - left) + "px");
+    if (top < r.top) pop.classList.add("above");
+    btn.setAttribute("aria-expanded", "true");
+    const onDoc = ev2 => { if (!pop.contains(ev2.target) && ev2.target !== btn && !btn.contains(ev2.target)) closePop(); };
+    const onKey = ev2 => { if (ev2.key === "Escape") { closePop(); btn.focus(); } };
+    const onScroll = () => closePop();
+    document.addEventListener("pointerdown", onDoc, true); document.addEventListener("keydown", onKey);
+    window.addEventListener("scroll", onScroll, true); window.addEventListener("resize", onScroll);
+    openPop = { pop, btn, onDoc, onKey, onScroll };
+    g.focus();
+  };
+  return btn;
 }

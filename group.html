@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041058">
+<link rel="stylesheet" href="style.css?v=202610041108">
 </head>
 <body>
 <div class="wrap">
@@ -14,7 +14,6 @@
     <img id="banner" class="banner" alt="" hidden>
     <h1 id="title">Secret Santa</h1>
     <div class="facts" id="facts"></div>
-    <div id="calSlot"></div>
   </header>
 
   <p id="fatal" class="msg err" hidden></p>
@@ -48,7 +47,8 @@
         <div><button class="primary" type="submit" id="joinBtn">Join</button></div>
       </form>
       <p id="joinMsg" class="msg err" hidden></p>
-      <p class="hint">No account needed. You'll get a personal link to come back to. Adding a baby or child? Join yourself first, then add them.</p>
+      <p class="hint">No account needed. You'll get a personal link to come back to.</p>
+      <p class="hint" id="joinKidsHint">Adding a baby or child? Join yourself first, then add them.</p>
     </div>
   </section>
 
@@ -69,11 +69,21 @@
   </section>
 
   <!-- Kids -->
+  <!-- In person or virtual (mixed groups) -->
+  <section id="participSec" hidden>
+    <h2>How are you taking part?</h2>
+    <div class="panel">
+      <label class="choice"><input type="radio" name="particip" id="partInPerson" value="inperson"> <span><b>In person</b><span class="hint">I'll be at the gift exchange.</span></span></label>
+      <label class="choice"><input type="radio" name="particip" id="partVirtual" value="virtual"> <span><b>Virtually</b><span class="hint">I can't make it, so gifts to and from me are mailed.</span></span></label>
+      <p id="participMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
   <!-- Mailing address (virtual exchanges) -->
   <section id="addrSec" hidden>
     <h2>Mailing address</h2>
     <div class="panel">
-      <p class="hint">This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.</p>
+      <p class="hint" id="addrIntro">This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.</p>
       <div id="addrView" hidden>
         <div class="addrcard" id="addrCard" translate="no"></div>
         <p class="hint" id="addrBadge"></p>
@@ -166,18 +176,18 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, normalizePhone, formatPhone, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041058";
+import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, normalizePhone, formatPhone, formatOf, kindOf, kidsOn, homeLink, organizeLink, groupIdFromUrl,
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041108";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041058";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041058";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041058";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041108";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041108";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041108";
 window.__ssReady = true;
-import { calendarMenu, calendarIcon } from "./calendar.js?v=202610041058";
-import { t, startTranslating } from "./i18n.js?v=202610041058";
+import { calendarIcon } from "./calendar.js?v=202610041108";
+import { t, startTranslating } from "./i18n.js?v=202610041108";
 const tr = t;
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041058";
+import { mountNav } from "./nav.js?v=202610041108";
 mountNav();
 
 const GID = groupIdFromUrl();
@@ -231,14 +241,15 @@ function render(){
   if (g.budget) fact("Limit", g.budget);
   if (g.kidBudget) fact("Kids", g.kidBudget);
   const dateChip = g.date ? fact("Exchange", fmtDate(g.date)) : null;
-  if (g.virtual) fact("Gifts", "mailed");
+  const fmt = formatOf(g);
+  if (fmt === "virtual") fact("Gifts", "mailed");
+  if (fmt === "mixed") fact("Gifts", "in person or mailed");
   fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
-  // Add-to-calendar, rebuilt only when the date, name or details change.
-  const calKey = [g.date, g.ev, g.budget, g.virtual].join("|");
-  if (calKey !== renderedCalKey) { renderedCalKey = calKey; $("calSlot").textContent = ""; if (g.date) $("calSlot").append(calendarMenu(g, groupLink(GID), GID)); }
-  if (dateChip && $("calSlot").firstChild) dateChip.append(calendarIcon($("calSlot").firstChild));
+  if (dateChip) dateChip.append(calendarIcon(g, groupLink(GID), GID));
 
   $("joinSec").hidden = !!me || !!g.drawn;
+  $("joinName").placeholder = kindOf(g) === "family" ? t("Your name, as your family knows you") : t("Your name, as the group knows you");
+  $("joinKidsHint").hidden = !kidsOn(g);
   $("lateMsg").hidden = !(g.drawn && !me);
   $("wishSec").hidden = $("linkSec").hidden = $("kidsSec").hidden = !me;
   if (!me) $("phoneSec").hidden = true;
@@ -247,14 +258,29 @@ function render(){
     $("hello").textContent = t("Hi {name}! Your wishlist", { name: me.name });
     $("myLink").textContent = linkFor(S.secret);
     syncTextarea($("myWish"), me.wishId);
+    // Kids are optional per group; hide everything about them when they're off.
+    const kids = kidsOn(g);
+    $("kidsSec").hidden = !kids; $("volunteerRow").hidden = $("volunteerHint").hidden = !kids;
     $("volunteer").checked = !!me.kidVolunteer;
     $("volunteer").disabled = !!g.drawn;
     $("kidForm").hidden = !!g.drawn;
     renderKids();
-    $("addrSec").hidden = !g.virtual;
+    // Mixed groups: each person chooses in person or virtual.
+    const myWish = S.wishes[me.wishId];
+    const myRemote = !!(myWish && myWish.remote);
+    $("participSec").hidden = fmt !== "mixed";
+    if (fmt === "mixed" && myWish) { $("partVirtual").checked = myRemote; $("partInPerson").checked = !myRemote; }
+    // An address is needed if gifts are mailed to this person: everyone in a virtual group,
+    // and in a mixed group anyone joining virtually or whose Secret Santa is.
+    const mailedToMe = !!(S.match && S.match.mailTo);
+    const needsAddr = fmt === "virtual" || (fmt === "mixed" && (myRemote || mailedToMe));
+    $("addrSec").hidden = !needsAddr;
+    $("addrIntro").textContent = fmt === "virtual" ? t("This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.")
+      : myRemote ? t("You're joining virtually, so your gift will be mailed to you. Only the person who draws your name and the organizer can see your address.")
+      : t("Your Secret Santa is joining virtually and will mail your gift. Add the address it should go to. Only they and the organizer can see it.");
     $("phoneSec").hidden = false;
-    $("kidMailHint").hidden = !(g.virtual && S.kids.length);
-    if (g.virtual) { watchAddr(me.wishId); renderAddr(); }
+    $("kidMailHint").hidden = !(needsAddr && S.kids.length);
+    if (needsAddr) { watchAddr(me.wishId); renderAddr(); }
   }
 
   $("peopleSec").hidden = false;
@@ -307,7 +333,9 @@ function renderMatch(){
     const to = el("span", "to", gft.name); to.setAttribute("translate", "no"); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
     const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
     if (lim) t.append(el("span", "hint", tr("Spending limit {amount}", { amount: lim })));
-    if (S.game.virtual) {
+    // Mail it when the whole group is virtual, or when either of you is joining virtually.
+    const meRemote = !!((S.wishes[S.me.wishId] || {}).remote), themRemote = !!((S.wishes[gft.wishId] || {}).remote);
+    if (formatOf(S.game) === "virtual" || (formatOf(S.game) === "mixed" && (meRemote || themRemote))) {
       const ml = el("span", "label", "Mail it to"); ml.style.marginTop = "10px"; t.append(ml);
       const a = S.addresses[gft.wishId];
       if (a) {
@@ -421,10 +449,10 @@ async function addKid(name){
   const kidId = randomId(16), wishId = randomId(), rosterId = kidRosterId(name) || ("kid-" + randomId(16)), createdAt = new Date().toISOString();
   const b = writeBatch(db);
   b.set(doc(db, "groups", GID, "people", S.secret, "kids", kidId), { name, wishId, rosterId, createdAt });
-  b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "" });
+  b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "", remote: !!((S.wishes[S.me.wishId] || {}).remote) });
   b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt: createdAt, kid: true, parentName: S.me.name });
   const myAddr = S.addresses[S.me.wishId];
-  if (S.game.virtual && myAddr) b.set(doc(db, "groups", GID, "addresses", wishId), kidAddress(myAddr, name));
+  if (formatOf(S.game) !== "inperson" && myAddr) b.set(doc(db, "groups", GID, "addresses", wishId), kidAddress(myAddr, name));
   showLoading(t("Adding {name} to Santa's list…", { name }));
   try { await b.commit(); $("kidName").value = ""; }
   catch (err) {
@@ -553,6 +581,16 @@ $("phoneRemove").addEventListener("click", async () => {
   try { await deleteDoc(doc(db, "groups", GID, "phones", S.secret)); msg("phoneMsg", "ok", t("Removed. You won't be included in group texts.")); }
   catch (err) { msg("phoneMsg", "err", t("Couldn't remove it. Try again.")); }
 });
+
+// ---------- In person or virtual (mixed groups) ----------
+document.querySelectorAll('input[name="particip"]').forEach(r => r.addEventListener("change", async () => {
+  const remote = $("partVirtual").checked;
+  const b = writeBatch(db);
+  b.update(doc(db, "groups", GID, "wishes", S.me.wishId), { remote });
+  S.kids.forEach(k => b.update(doc(db, "groups", GID, "wishes", k.wishId), { remote }));   // kids go with their parent
+  try { await b.commit(); msg("participMsg", "ok", remote ? t("Got it. You're joining virtually, so add your mailing address below.") : t("Got it. See you at the exchange!")); }
+  catch (e) { msg("participMsg", "err", t("Couldn't save that. Try again.")); render(); }
+}));
 </script>
 </body>
 </html>

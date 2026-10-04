@@ -202,3 +202,23 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .calmenu{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
 .calmenu .button,.calmenu button{display:inline-flex;align-items:center;gap:6px}
 .ico{display:inline-flex}
+/* Calendar pop-up next to the date */
+.calpop{position:fixed;z-index:80;min-width:230px;max-width:calc(100vw - 24px);background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:10px;display:flex;flex-direction:column;gap:4px;box-shadow:0 12px 32px rgba(0,0,0,.18)}
+.calpop::before{content:"";position:absolute;top:-7px;left:calc(var(--arrow-x,24px) - 7px);width:12px;height:12px;background:var(--paper);border-left:1px solid var(--line);border-top:1px solid var(--line);transform:rotate(45deg)}
+.calpop.above::before{top:auto;bottom:-7px;transform:rotate(225deg)}
+.calpop .label{padding:4px 8px 6px}
+.calopt{display:flex;align-items:center;gap:10px;width:100%;text-align:left;font:inherit;font-weight:600;color:var(--ink);text-decoration:none;background:transparent;border:none;border-radius:10px;padding:10px 8px;cursor:pointer}
+.calopt:hover,.calopt:focus-visible{background:var(--soft)}
+.calopt .ico{color:var(--accent)}
+
+/* In person / virtual choice, group type */
+.choice{display:flex;align-items:flex-start;gap:12px;padding:12px;border:1px solid var(--line);border-radius:12px;cursor:pointer}
+.choice input{width:20px;height:20px;margin-top:2px;accent-color:var(--accent);flex:none}
+.choice > span{display:flex;flex-direction:column;gap:2px}
+.choice:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 6%,transparent)}
+.createform{display:flex;flex-direction:column;gap:12px}
+.kindpick{border:none;margin:0;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.kindpick legend{width:100%;margin-bottom:6px}
+.kindopt{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}
+.kindopt input{accent-color:var(--accent);margin:0}
+.kindopt:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent)}

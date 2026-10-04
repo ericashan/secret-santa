@@ -2,8 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { t, locale } from "./i18n.js?v=202610041058";
-import { firebaseConfig } from "./firebase-config.js?v=202610041058";
+import { t, locale } from "./i18n.js?v=202610041108";
+import { firebaseConfig } from "./firebase-config.js?v=202610041108";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -159,3 +159,11 @@ export function smsGroupHref(numbers, body){
   if (ios) return "sms://open?addresses=" + numbers.join(",") + "&body=" + b;
   return "sms:" + numbers.join(",") + "?body=" + b;
 }
+
+// ---------- Group settings with sensible defaults for older groups ----------
+// format: "inperson" | "mixed" (some people join virtually) | "virtual" (everyone mails gifts)
+export const formatOf = g => (g && g.format) || (g && g.virtual ? "virtual" : "inperson");
+// kind: "family" | "friends" | "coworkers" | "other"
+export const kindOf = g => (g && g.kind) || "family";
+// Kids (receive but don't give) are on by default only for family groups.
+export const kidsOn = g => (g && typeof g.kids === "boolean") ? g.kids : kindOf(g) === "family";

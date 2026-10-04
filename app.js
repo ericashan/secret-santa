@@ -2,8 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { t, locale } from "./i18n.js?v=202610041108";
-import { firebaseConfig } from "./firebase-config.js?v=202610041108";
+import { t, locale } from "./i18n.js?v=202610041118";
+import { firebaseConfig } from "./firebase-config.js?v=202610041118";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;

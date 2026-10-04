@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041108">
+<link rel="stylesheet" href="style.css?v=202610041118">
 </head>
 <body>
 <div class="wrap">
@@ -60,7 +60,7 @@
     <div class="panel">
       <div class="field">
         <label class="label" for="myWish">Gift ideas</label>
-        <textarea id="myWish" placeholder="Sizes, favorite colors, books you want, links, things you don't want…" maxlength="4000"></textarea>
+        <textarea id="myWish" placeholder="Tap a prompt above, or type anything you'd like…" maxlength="4000"></textarea>
       </div>
       <p class="hint" id="wishStatus">Only the person who draws your name sees this. It saves as you type.</p>
       <label class="check" id="volunteerRow"><input type="checkbox" id="volunteer"> I'm happy to buy for a kid too</label>
@@ -177,17 +177,18 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 </script>
 <script type="module">
 import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, normalizePhone, formatPhone, formatOf, kindOf, kidsOn, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041108";
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041118";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041108";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041108";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041108";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041118";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041118";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041118";
 window.__ssReady = true;
-import { calendarIcon } from "./calendar.js?v=202610041108";
-import { t, startTranslating } from "./i18n.js?v=202610041108";
+import { wishlistHelpers } from "./prompts.js?v=202610041118";
+import { calendarIcon } from "./calendar.js?v=202610041118";
+import { t, startTranslating } from "./i18n.js?v=202610041118";
 const tr = t;
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041108";
+import { mountNav } from "./nav.js?v=202610041118";
 mountNav();
 
 const GID = groupIdFromUrl();
@@ -228,6 +229,7 @@ function saveWish(id, value, statusEl){
 function syncTextarea(ta, id){ const w = S.wishes[id]; if (w && document.activeElement !== ta && ta.value !== (w.wishlist || "")) ta.value = w.wishlist || ""; }
 
 let renderedCalKey = null;
+let myHelpers = null;
 let gotGame = false, gotRoster = false, gotMe = false;
 
 function render(){
@@ -257,7 +259,15 @@ function render(){
   if (me) {
     $("hello").textContent = t("Hi {name}! Your wishlist", { name: me.name });
     $("myLink").textContent = linkFor(S.secret);
+    // Tap-to-add prompts (built once per group type) and the helpfulness meter.
+    const gk = kindOf(g);
+    if (!myHelpers || myHelpers.kind !== gk) {
+      if (myHelpers) { myHelpers.chips.remove(); myHelpers.meter.remove(); }
+      myHelpers = { kind: gk, ...wishlistHelpers($("myWish"), "adult", gk) };
+      $("myWish").before(myHelpers.chips); $("myWish").after(myHelpers.meter);
+    }
     syncTextarea($("myWish"), me.wishId);
+    myHelpers.update();
     // Kids are optional per group; hide everything about them when they're off.
     const kids = kidsOn(g);
     $("kidsSec").hidden = !kids; $("volunteerRow").hidden = $("volunteerHint").hidden = !kids;
@@ -308,12 +318,14 @@ function renderKids(){
     if (!row) {
       row = el("div", "kidrow"); row.dataset.id = k.id;
       const head = el("span", "label namewithicon"); head.append(babyIcon(), t("{name}'s wishlist", { name: k.name })); row.append(head);
-      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = "Age, sizes, favorite characters, what they already have…"; ta.setAttribute("aria-label", t("{name}'s wishlist", { name: k.name }));
+      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = t("Tap a prompt above, or type anything you'd like…"); ta.setAttribute("aria-label", t("{name}'s wishlist", { name: k.name }));
       const st = el("p", "hint", "Saves as you type.");
       ta.addEventListener("input", () => saveWish(k.wishId, ta.value, st));
-      row.append(ta, st); list.append(row);
+      const h = wishlistHelpers(ta, "kid"); row._helpers = h;
+      row.append(h.chips, ta, h.meter, st); list.append(row);
     }
     syncTextarea(row.querySelector("textarea"), k.wishId);
+    if (row._helpers) row._helpers.update();
   });
   $("kidRemoveHint").hidden = !S.kids.length;
 }

@@ -222,3 +222,12 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .kindopt{display:inline-flex;align-items:center;gap:6px;border:1px solid var(--line);border-radius:999px;padding:8px 14px;font-weight:600;cursor:pointer}
 .kindopt input{accent-color:var(--accent);margin:0}
 .kindopt:has(input:checked){border-color:var(--accent);background:color-mix(in srgb,var(--accent) 8%,transparent);color:var(--accent)}
+
+/* Wishlist prompts */
+.promptchips{display:flex;flex-wrap:wrap;gap:6px}
+.promptchip{font-size:.85rem;font-weight:600;padding:6px 12px;border-radius:999px;background:var(--soft);border:1px solid transparent;color:var(--pine)}
+.promptchip:hover{border-color:var(--line)}
+.promptchip.surprise{background:transparent;border:1px dashed var(--gold);color:var(--ink)}
+.meter{margin:0;font-size:.875rem;font-weight:600;color:var(--gold)}
+.meter.done{color:var(--ok)}
+.promptchip.more{background:transparent;border:1px solid var(--line);color:var(--muted)}

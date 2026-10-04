@@ -3,98 +3,33 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<meta name="theme-color" content="#b3263e">
-<link rel="manifest" href="manifest.json">
-<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
-<title>Privacy Policy · Secret Santa</title>
-<link rel="stylesheet" href="style.css?v=202610041152">
-<style>
-  .policy{display:flex;flex-direction:column;gap:22px}
-  .policy h2{font-size:1.25rem}
-  .policy p,.policy li{max-width:65ch;margin:0}
-  .policy ul{margin:0;padding-left:1.2em;display:flex;flex-direction:column;gap:6px}
-  .policy section{gap:8px}
-</style>
+<title>Secret Santa has moved</title>
+<meta name="robots" content="noindex">
+<script>
+// Secret Santa moved to https://secret-santa-draw.github.io
+// This sends visitors to the same page there, keeping everything after the address
+// (group links, personal links). From the home page it also hands over this device's
+// saved groups and language, in the "#import=" part of the link, which never leaves the phone.
+(function(){
+  var NEW = "https://secret-santa-draw.github.io";
+  var path = location.pathname.replace(/^\/secret-santa/, "") || "/";
+  var target = NEW + path + location.search + location.hash;
+  if ((path === "/" || path === "/index.html") && !location.hash) {
+    try {
+      var g = localStorage.getItem("ss-my-groups"), l = localStorage.getItem("ss-lang");
+      var groups = g ? JSON.parse(g) : {};
+      if (Object.keys(groups).length || l) {
+        var enc = btoa(unescape(encodeURIComponent(JSON.stringify({ g: groups, l: l }))))
+          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+        target = NEW + "/#import=" + enc;
+      }
+    } catch (e) {}
+  }
+  location.replace(target);
+})();
+</script>
 </head>
-<body>
-<div class="wrap policy">
-  <header>
-    <h1>Privacy Policy</h1>
-    <p class="hint">Last updated October 4, 2026</p>
-  </header>
-
-  <section>
-    <p>Secret Santa is a free website and app for running gift exchanges with family, friends and coworkers. This policy explains what information it keeps, who can see it, and how to have it deleted. There are no ads, and your information is never sold or used for marketing.</p>
-  </section>
-
-  <section>
-    <h2>What we keep</h2>
-    <ul>
-      <li><b>Your name</b> as you enter it when you join a group.</li>
-      <li><b>Your wishlist</b> and anything you write in it.</li>
-      <li><b>Children's first names and wishlists</b>, if a parent adds them to a group.</li>
-      <li><b>Whether you're taking part in person or virtually</b>, if the organizer offers that choice.</li>
-      <li><b>Your mailing address and the name for the package</b>, only for groups where gifts are mailed.</li>
-      <li><b>Your mobile number</b>, only if you choose to add it for group texts.</li>
-      <li><b>Group details</b> the organizer sets: the group name, date, spending limit, currency and an optional group photo.</li>
-      <li><b>Your Google account email and a sign-in ID</b>, only if you sign in with Google (required for organizers, optional for everyone else).</li>
-      <li><b>Who is matched with whom</b> after names are drawn.</li>
-    </ul>
-    <p>Your device also keeps your personal links, your language choice and a copy of group details so the app opens quickly. That stays on your device.</p>
-  </section>
-
-  <section>
-    <h2>Who can see it</h2>
-    <ul>
-      <li><b>Everyone in your group</b> sees the names of the people who joined, plus the group details and photo.</li>
-      <li><b>Your Secret Santa</b> sees your wishlist and, for mailed gifts, your mailing address. They see these only after names are drawn.</li>
-      <li><b>The group's organizer</b> can reach the group's information, including personal links, wishlists, mailing addresses and mobile numbers, so they can help people and run the draw. The organizer's page never shows who drew whom.</li>
-      <li>Nobody outside your group can see your information without your personal link.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Services we use</h2>
-    <ul>
-      <li><b>Google Firebase</b> stores group information and handles Google sign-in.</li>
-      <li><b>GitHub Pages</b> hosts the website.</li>
-      <li><b>Google Fonts</b> provides the fonts the site uses.</li>
-      <li><b>The US Census Bureau address service</b> checks US mailing addresses. When you tap "Check and save," the street, city, state and ZIP code you typed are sent to it. Your name is not sent.</li>
-    </ul>
-    <p>These services may receive your device's IP address when they deliver their part of the site, as is normal for websites.</p>
-  </section>
-
-  <section>
-    <h2>Group texts</h2>
-    <p>Texts are never sent automatically. If an organizer chooses to text the group, the message is sent from the organizer's own phone, using the numbers people chose to add.</p>
-  </section>
-
-  <section>
-    <h2>Children</h2>
-    <p>The app is meant for adults. Children don't use it themselves. A parent may add a child's first name and wishlist so the child can receive a gift, and can ask the organizer to remove it at any time.</p>
-  </section>
-
-  <section>
-    <h2>Deleting your information</h2>
-    <ul>
-      <li><b>Change your own details:</b> on your page you can clear your wishlist, remove your mobile number and change your mailing address at any time.</li>
-      <li><b>Leave a group:</b> ask the group's organizer to remove you. This deletes your name, wishlist, address, phone number and any children you added.</li>
-      <li><b>Delete a whole group:</b> organizers can delete their group from the organizer page. This removes it for everyone.</li>
-      <li><b>Anything else</b>, including deleting a Google sign-in and the list of groups saved to it: email <a href="mailto:secret.santa.playstore@gmail.com" id="contactLink">secret.santa.playstore@gmail.com</a> and we'll delete it within 30 days.</li>
-    </ul>
-  </section>
-
-  <section>
-    <h2>Keeping it safe</h2>
-    <p>Information is sent over encrypted connections. Database rules make sure only the right people can reach each piece of information, and that only a group's organizer can draw names or change the group.</p>
-  </section>
-
-  <section>
-    <h2>Changes and contact</h2>
-    <p>If this policy changes, the date at the top will change too. Questions? Email <a href="mailto:secret.santa.playstore@gmail.com">secret.santa.playstore@gmail.com</a>.</p>
-  </section>
-
-  <footer class="row"><a href="./">Back to Secret Santa</a></footer>
-</div>
+<body style="font-family:system-ui,sans-serif;padding:24px">
+<p>Secret Santa has moved to <a href="https://secret-santa-draw.github.io/">secret-santa-draw.github.io</a>. Taking you there…</p>
 </body>
 </html>

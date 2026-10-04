@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041013">
+<link rel="stylesheet" href="style.css?v=202610041028">
 </head>
 <body>
 <div class="wrap">
@@ -64,6 +64,41 @@
   </section>
 
   <!-- Kids -->
+  <!-- Mailing address (virtual exchanges) -->
+  <section id="addrSec" hidden>
+    <h2>Mailing address</h2>
+    <div class="panel">
+      <p class="hint">This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.</p>
+      <div id="addrView" hidden>
+        <div class="addrcard" id="addrCard"></div>
+        <p class="hint" id="addrBadge"></p>
+        <div class="row"><button type="button" class="small" id="addrEdit">Edit address</button></div>
+      </div>
+      <form id="addrForm" class="addrform" autocomplete="on" novalidate>
+        <div class="field"><label class="label" for="aName">Full name for the package</label><input id="aName" autocomplete="name" maxlength="80" placeholder="First and last name"></div>
+        <label class="check"><input type="checkbox" id="aIntl"> I live outside the US</label>
+        <div id="usFields" class="addrgrid">
+          <div class="field span2"><label class="label" for="aLine1">Street address</label><input id="aLine1" autocomplete="address-line1" maxlength="120" placeholder="123 Elm St"></div>
+          <div class="field span2"><label class="label" for="aLine2">Apt, suite or unit (optional)</label><input id="aLine2" autocomplete="address-line2" maxlength="120" placeholder="Apt 4B"></div>
+          <div class="field span2"><label class="label" for="aCity">City</label><input id="aCity" autocomplete="address-level2" maxlength="60"></div>
+          <div class="field"><label class="label" for="aState">State</label><select id="aState" autocomplete="address-level1"></select></div>
+          <div class="field"><label class="label" for="aZip">ZIP code</label><input id="aZip" autocomplete="postal-code" inputmode="numeric" maxlength="10" placeholder="12345"></div>
+        </div>
+        <div id="intlFields" class="field" hidden>
+          <label class="label" for="aIntlText">Full mailing address, including country</label>
+          <textarea id="aIntlText" autocomplete="street-address" maxlength="400" placeholder="Street and number&#10;City, region, postal code&#10;Country"></textarea>
+          <p class="hint">Addresses outside the US are saved as you type them.</p>
+        </div>
+        <div class="row"><button class="primary" type="submit" id="addrSave">Check and save</button><button type="button" class="ghost" id="addrCancel" hidden>Cancel</button></div>
+      </form>
+      <div id="addrSuggest" class="confirm" hidden>
+        <span id="addrSuggestText"></span>
+        <div id="addrOptions" class="addropts"></div>
+      </div>
+      <p id="addrMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
   <section id="kidsSec" hidden>
     <h2>Your kids</h2>
     <div class="panel">
@@ -79,6 +114,7 @@
       </div>
       <p id="kidMsg" class="msg err" hidden></p>
       <p class="hint" id="kidRemoveHint">Need to remove a child? Ask the organizer.</p>
+      <p class="hint" id="kidMailHint" hidden>Your kids' gifts will be mailed to your address.</p>
     </div>
   </section>
 
@@ -112,15 +148,16 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 </script>
 <script type="module">
 import { configured, db, $, el, msg, randomId, fmtDate, personalLink, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041013";
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041028";
 import { doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041013";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041013";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041028";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041028";
 window.__ssReady = true;
 
 const GID = groupIdFromUrl();
 if (!GID) { location.replace(homeLink()); throw new Error("no group"); }
-const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, kids: [], match: undefined, revealed: false };
+const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, addresses: {}, kids: [], match: undefined, revealed: false, addrEditing: false };
 let firstLoad = true;
 showLoading("Santa's fetching your group…", true);
 
@@ -135,7 +172,10 @@ if (localGroups()[GID] && localGroups()[GID].organizer) { $("orgLink").href = or
 // Live wishlists by id (mine, my kids', and the people I'm buying for).
 const wishSubs = {};
 function watchWish(id){ if (!id || wishSubs[id]) return; wishSubs[id] = onSnapshot(doc(db, "groups", GID, "wishes", id), w => { S.wishes[id] = w.exists() ? w.data() : null; render(); }); }
-function unwatchWishes(){ Object.keys(wishSubs).forEach(k => { wishSubs[k](); delete wishSubs[k]; }); S.wishes = {}; }
+function unwatchWishes(){ Object.keys(wishSubs).forEach(k => { wishSubs[k](); delete wishSubs[k]; }); S.wishes = {}; Object.keys(addrSubs).forEach(k => { addrSubs[k](); delete addrSubs[k]; }); S.addresses = {}; }
+// Mailing addresses use the same key as wishlists.
+const addrSubs = {};
+function watchAddr(id){ if (!id || addrSubs[id]) return; addrSubs[id] = onSnapshot(doc(db, "groups", GID, "addresses", id), a => { S.addresses[id] = a.exists() ? a.data() : null; render(); }, () => {}); }
 
 // Autosave a wishlist: one write at a time, after a short pause in typing.
 const savers = {};
@@ -165,6 +205,7 @@ function render(){
   if (g.budget) fact("Limit", g.budget);
   if (g.kidBudget) fact("Kids", g.kidBudget);
   if (g.date) fact("Exchange", fmtDate(g.date));
+  if (g.virtual) fact("Gifts", "mailed");
   fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
 
   $("joinSec").hidden = !!me || !!g.drawn;
@@ -179,6 +220,9 @@ function render(){
     $("volunteer").disabled = !!g.drawn;
     $("kidForm").hidden = !!g.drawn;
     renderKids();
+    $("addrSec").hidden = !g.virtual;
+    $("kidMailHint").hidden = !(g.virtual && S.kids.length);
+    if (g.virtual) { watchAddr(me.wishId); renderAddr(); }
   }
 
   $("peopleSec").hidden = false;
@@ -231,6 +275,16 @@ function renderMatch(){
     const to = el("span", "to", gft.name); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
     const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
     if (lim) t.append(el("span", "hint", "Spending limit " + lim));
+    if (S.game.virtual) {
+      const ml = el("span", "label", "Mail it to"); ml.style.marginTop = "10px"; t.append(ml);
+      const a = S.addresses[gft.wishId];
+      if (a) {
+        const card = el("div", "addrcard"); card.textContent = labelLines(a).join("\n"); t.append(card);
+        const cp = el("button", "small", "Copy address"); cp.type = "button";
+        cp.onclick = async () => { try { await navigator.clipboard.writeText(labelLines(a).join("\n")); cp.textContent = "Copied"; } catch (e) { cp.textContent = "Couldn't copy"; } setTimeout(() => cp.textContent = "Copy address", 1800); };
+        const r = el("div", "row"); r.append(cp); t.append(r);
+      } else t.append(el("p", "wish none", (gft.kid ? "Their parent hasn't" : "They haven't") + " added a mailing address yet. Check back soon."));
+    }
     const lab = el("span", "label", gft.kid ? "Their wishlist (from their parent)" : "Their wishlist"); lab.style.marginTop = "10px"; t.append(lab);
     const w = S.wishes[gft.wishId], txt = w && w.wishlist && w.wishlist.trim();
     t.append(el("p", "wish" + (txt ? "" : " none"), txt || "No wishlist yet. Check back later."));
@@ -266,7 +320,7 @@ function watchMe(secret){
     }));
     unsubs.push(onSnapshot(doc(db, "groups", GID, "matches", secret), m => {
       S.match = m.exists() ? m.data() : null;
-      ((S.match && S.match.gifts) || []).forEach(g => watchWish(g.wishId));
+      ((S.match && S.match.gifts) || []).forEach(g => { watchWish(g.wishId); watchAddr(g.wishId); });
       render();
     }));
   }).catch(() => fatal("Couldn't load your details. Check your connection and reload.")).finally(hideLoading);
@@ -333,6 +387,8 @@ async function addKid(name){
   b.set(doc(db, "groups", GID, "people", S.secret, "kids", kidId), { name, wishId, rosterId, createdAt });
   b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "" });
   b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt: createdAt, kid: true, parentName: S.me.name });
+  const myAddr = S.addresses[S.me.wishId];
+  if (S.game.virtual && myAddr) b.set(doc(db, "groups", GID, "addresses", wishId), kidAddress(myAddr, name));
   showLoading("Adding " + name + " to Santa's list…");
   try { await b.commit(); $("kidName").value = ""; }
   catch (err) {
@@ -359,6 +415,90 @@ $("copyLink").addEventListener("click", async () => {
 });
 $("revealBtn").addEventListener("click", () => { S.revealed = true; renderMatch(); $("tags").querySelectorAll(".tag").forEach(t => t.classList.add("show")); });
 $("hideMatch").addEventListener("click", () => { S.revealed = false; renderMatch(); });
+
+// ---------- Mailing address ----------
+$("aState").append(new Option("Choose…", ""));
+US_STATES.forEach(([code, name]) => $("aState").append(new Option(name, code)));
+const addrFields = ["aName", "aLine1", "aLine2", "aCity", "aState", "aZip", "aIntlText"];
+function readAddrForm(){
+  const intl = $("aIntl").checked;
+  return { fullName: $("aName").value.trim().replace(/\s+/g, " "), intl: intl ? $("aIntlText").value.trim() : "",
+    line1: intl ? "" : $("aLine1").value.trim().replace(/\s+/g, " "), line2: intl ? "" : $("aLine2").value.trim().replace(/\s+/g, " "),
+    city: intl ? "" : $("aCity").value.trim().replace(/\s+/g, " "), state: intl ? "" : $("aState").value, zip: intl ? "" : $("aZip").value.trim() };
+}
+function fillAddrForm(a){
+  $("aName").value = (a && a.fullName) || ""; $("aIntl").checked = !!(a && a.intl);
+  $("aLine1").value = (a && a.line1) || ""; $("aLine2").value = (a && a.line2) || ""; $("aCity").value = (a && a.city) || "";
+  $("aState").value = (a && a.state) || ""; $("aZip").value = (a && a.zip) || ""; $("aIntlText").value = (a && a.intl) || "";
+  toggleIntl();
+}
+function toggleIntl(){ const i = $("aIntl").checked; $("usFields").hidden = i; $("intlFields").hidden = !i; }
+$("aIntl").addEventListener("change", toggleIntl);
+function hideSuggest(){ $("addrSuggest").hidden = true; $("addrOptions").textContent = ""; }
+addrFields.forEach(id => $(id).addEventListener("input", () => { hideSuggest(); msg("addrMsg", "", ""); }));
+
+function renderAddr(){
+  const saved = S.addresses[S.me.wishId];
+  const editing = S.addrEditing || !saved;
+  $("addrView").hidden = editing; $("addrForm").hidden = !editing;
+  $("addrCancel").hidden = !saved;
+  if (!editing) {
+    $("addrCard").textContent = labelLines(saved).join("\n");
+    $("addrBadge").textContent = saved.intl ? "Saved as typed (outside the US)." : saved.verified ? "✓ Matches US address records." : "Saved as typed. It didn't match US address records, so double-check it.";
+    $("addrBadge").className = "hint" + (saved.verified ? " ok" : "");
+  }
+}
+$("addrEdit").addEventListener("click", () => { S.addrEditing = true; fillAddrForm(S.addresses[S.me.wishId]); hideSuggest(); msg("addrMsg", "", ""); renderAddr(); $("aName").focus(); });
+$("addrCancel").addEventListener("click", () => { S.addrEditing = false; hideSuggest(); msg("addrMsg", "", ""); renderAddr(); });
+
+const kidAddress = (a, kidName) => ({ ...a, fullName: kidName, careOf: a.fullName, updatedAt: new Date().toISOString() });
+async function saveAddress(a, verified){
+  const data = { fullName: a.fullName, careOf: "", line1: a.line1, line2: a.line2, city: a.city, state: a.state, zip: a.zip, intl: a.intl, verified, updatedAt: new Date().toISOString() };
+  const b = writeBatch(db);
+  b.set(doc(db, "groups", GID, "addresses", S.me.wishId), data);
+  S.kids.forEach(k => b.set(doc(db, "groups", GID, "addresses", k.wishId), kidAddress(data, k.name)));
+  showLoading("Saving your address…");
+  try { await b.commit(); S.addrEditing = false; hideSuggest(); msg("addrMsg", "ok", verified ? "Saved. The address matches US address records." : "Saved."); render(); }
+  catch (e) { msg("addrMsg", "err", "Couldn't save the address. Check your connection and try again."); }
+  finally { hideLoading(); }
+}
+
+function offer(text, options){
+  $("addrSuggestText").textContent = text;
+  const box = $("addrOptions"); box.textContent = "";
+  options.forEach(o => { const btn = el("button", "addropt" + (o.primary ? " primary" : ""), null); btn.type = "button";
+    btn.append(el("span", "addropt-title", o.title)); if (o.detail) btn.append(el("span", "addropt-detail", o.detail));
+    btn.onclick = o.onPick; box.append(btn); });
+  $("addrSuggest").hidden = false; msg("addrMsg", "", "");
+}
+
+$("addrForm").addEventListener("submit", async e => {
+  e.preventDefault(); hideSuggest();
+  const a = readAddrForm();
+  const problem = checkAddress(a);
+  if (problem) { msg("addrMsg", "err", problem); return; }
+  if (a.intl) { await saveAddress(a, false); return; }
+  if (/^\s*p\.?\s*o\.?\s*box\b/i.test(a.line1)) { await saveAddress(a, false); msg("addrMsg", "ok", "Saved. PO Boxes can't be checked against address records, so double-check the box number."); return; }
+  showLoading("Checking the address…");
+  const r = await lookupUS(a);
+  hideLoading();
+  if (r.status === "match") {
+    const best = r.suggestions[0];
+    if (exactlySame(a, best)) { await saveAddress(a, true); return; }
+    const opts = r.suggestions.map((sug, i) => {
+      const merged = { ...a, line1: sug.line1, city: sug.city, state: sug.state, zip: /^\d{5}-?\d{4}$/.test(a.zip) && a.zip.slice(0, 5) === sug.zip ? a.zip : sug.zip };
+      return { title: (i === 0 ? "Use suggested: " : "Use: ") + oneLine(merged), detail: i === 0 ? "Standard mailing format" : "", primary: i === 0, onPick: () => saveAddress(merged, true) };
+    });
+    opts.push({ title: "Keep what I typed: " + oneLine(a), onPick: () => saveAddress(a, sameAddress(a, best)) });
+    offer(r.suggestions.length > 1 ? "We found a few possible matches. Which should we mail to?" : "We found this address in US records. The suggested version is the best one to use for mailing.", opts);
+  } else if (r.status === "nomatch") {
+    offer("We couldn't find this address in US address records. Check the house number, street name and ZIP code. If it's correct (new homes sometimes aren't listed yet), you can save it anyway.",
+      [{ title: "Save anyway: " + oneLine(a), onPick: () => saveAddress(a, false) }]);
+  } else {
+    offer("We couldn't check the address right now. You can save it as typed and check again later.",
+      [{ title: "Save as typed: " + oneLine(a), onPick: () => saveAddress(a, false) }]);
+  }
+});
 </script>
 </body>
 </html>

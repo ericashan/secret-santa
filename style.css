@@ -144,3 +144,16 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
 .stalled{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
 .stalled p{margin:0;font-weight:600}
+
+/* Mailing addresses */
+.addrform{display:flex;flex-direction:column;gap:12px}
+.addrgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.addrgrid .span2{grid-column:span 2}
+@media (max-width:400px){.addrgrid{grid-template-columns:1fr}.addrgrid .span2{grid-column:auto}}
+.addrcard{white-space:pre-line;background:var(--soft);border-radius:10px;padding:12px 14px;font-weight:500;line-height:1.45;overflow-wrap:anywhere}
+.addropts{display:flex;flex-direction:column;gap:8px}
+.addropt{display:flex;flex-direction:column;align-items:flex-start;gap:2px;text-align:left;width:100%}
+.addropt-title{overflow-wrap:anywhere}
+.addropt-detail{font-size:.8rem;font-weight:500;opacity:.85}
+.hint.ok{color:var(--ok)}
+.badge.warn{background:color-mix(in srgb,var(--accent) 14%,transparent);color:var(--accent)}

@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041013">
+<link rel="stylesheet" href="style.css?v=202610041028">
 </head>
 <body>
 <div class="wrap">
@@ -70,10 +70,10 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite, smsHref } from "./app.js?v=202610041013";
+         copyText, canShare, shareInvite, smsHref } from "./app.js?v=202610041028";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041013";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
 window.__ssReady = true;
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }

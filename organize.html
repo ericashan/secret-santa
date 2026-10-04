@@ -6,7 +6,7 @@
 <title>Secret Santa Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041013">
+<link rel="stylesheet" href="style.css?v=202610041028">
 </head>
 <body>
 <div class="wrap">
@@ -60,6 +60,8 @@
           <div class="field"><label class="label" for="evBudget">Spending limit</label><input id="evBudget" placeholder="$30" maxlength="20"></div>
           <div class="field"><label class="label" for="evKidBudget">Limit for kid gifts</label><input id="evKidBudget" placeholder="$15" maxlength="20"></div>
         </div>
+        <label class="check"><input type="checkbox" id="evVirtual"> Virtual exchange: gifts are mailed</label>
+        <p class="hint">Turn this on and everyone adds a mailing address, which their Secret Santa sees after the draw.</p>
         <p class="hint" id="saveStatus">Changes save automatically. Leave the kid limit empty to use the main limit.</p>
       </div>
     </section>
@@ -131,12 +133,12 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText,
          canShare, shareInvite, smsHref, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041013";
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041028";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041013";
-import { drawAll } from "./draw.js?v=202610041013";
-import { babyIcon } from "./icons.js?v=202610041013";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041028";
+import { drawAll } from "./draw.js?v=202610041028";
+import { babyIcon } from "./icons.js?v=202610041028";
 window.__ssReady = true;
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -147,8 +149,8 @@ const G = (...path) => doc(db, "groups", GID, ...path);
 const GC = (...path) => collection(db, "groups", GID, ...path);
 const invite = groupLink(GID);
 $("groupPageLink").href = invite;
-const S = { game: {}, people: {}, kids: {}, excl: [] };   // kids: { parentSecret: [kid, ...] }
-let unsubs = [], kidSubs = {};
+const S = { game: {}, people: {}, kids: {}, excl: [], addr: {} };   // kids: { parentSecret: [kid, ...] }
+let unsubs = [], kidSubs = {}, addrSubs = {};
 
 const nameOf = s => (S.people[s] && S.people[s].name) || "Someone";
 const allKids = () => Object.entries(S.kids).filter(([p]) => S.people[p]).flatMap(([p, ks]) => ks.map(k => ({ ...k, parent: p })));
@@ -185,7 +187,7 @@ $("photoRemove").onclick = async () => {
 $("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithGoogle(); } catch(e){ msg("authMsg", "err", signInError(e)); } };
 $("signOut").onclick = () => signOutNow();
 
-function stopAll(){ unsubs.forEach(u => u()); unsubs = []; Object.values(kidSubs).forEach(u => u()); kidSubs = {}; S.kids = {}; }
+function stopAll(){ unsubs.forEach(u => u()); unsubs = []; Object.values(kidSubs).forEach(u => u()); kidSubs = {}; S.kids = {}; Object.values(addrSubs).forEach(u => u()); addrSubs = {}; S.addr = {}; }
 
 let booting = true;
 showLoading("Santa's checking his list…", true);
@@ -216,6 +218,9 @@ async function openOrganizer(user){
       Object.keys(p).forEach(sec => { if (!kidSubs[sec]) kidSubs[sec] = onSnapshot(GC("people", sec, "kids"), ks => {
         S.kids[sec] = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)); render(); }); });
       Object.keys(kidSubs).forEach(sec => { if (!p[sec]) { kidSubs[sec](); delete kidSubs[sec]; delete S.kids[sec]; } });
+      // Whether each person has added a mailing address (for virtual exchanges).
+      Object.keys(p).forEach(sec => { if (!addrSubs[sec]) addrSubs[sec] = onSnapshot(G("addresses", p[sec].wishId), a => { S.addr[sec] = a.exists(); render(); }, () => {}); });
+      Object.keys(addrSubs).forEach(sec => { if (!p[sec]) { addrSubs[sec](); delete addrSubs[sec]; delete S.addr[sec]; } });
       render(); resolve();
     }, () => resolve()));
   });
@@ -225,6 +230,7 @@ function setVal(id, v){ const e = $(id); if (document.activeElement !== e && e.v
 function render(){
   const g = S.game, ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
   const kids = allKids();
+  if (document.activeElement !== $("evVirtual")) $("evVirtual").checked = !!g.virtual;
   setVal("evName", g.ev); setVal("evBudget", g.budget); setVal("evKidBudget", g.kidBudget); setVal("evDate", g.date);
 
   const list = $("people"); list.textContent = "";
@@ -232,6 +238,7 @@ function render(){
     const it = el("div", "item");
     const w = el("span", "who", nameOf(id));
     if (S.people[id].kidVolunteer) { w.append(" "); w.append(el("span", "badge", "will buy for a kid")); }
+    if (g.virtual && S.addr[id] === false) { w.append(" "); w.append(el("span", "badge warn", "no address yet")); }
     const row = el("div", "row");
     const c = el("button", "small", "Copy their link"); c.type = "button";
     c.onclick = () => copy(personalLink(GID, id), c, "Copy their link");
@@ -268,6 +275,8 @@ function render(){
   $("kidPlan").textContent = !g.drawn && kids.length
     ? kids.length + (kids.length === 1 ? " adult" : " adults") + " will also buy a gift for a kid. Volunteers are picked first, and nobody gets their own kid or a kid from a household you've linked above."
     : "";
+  const noAddr = g.virtual ? ids.filter(id => S.addr[id] === false).length : 0;
+  if (!g.drawn && noAddr) $("kidPlan").textContent = (noAddr === 1 ? "1 person hasn't" : noAddr + " people haven't") + " added a mailing address yet. You can still draw; they can add it afterward. " + $("kidPlan").textContent;
   $("kidPlan").hidden = !$("kidPlan").textContent;
   $("drawArea").hidden = !!g.drawn; $("resetArea").hidden = !g.drawn;
   $("drawBtn").disabled = ids.length < 3;
@@ -275,6 +284,10 @@ function render(){
 
 // Group details: save after a pause in typing.
 let sTimer = null;
+$("evVirtual").addEventListener("change", async () => {
+  try { await setDoc(doc(db, "groups", GID), { virtual: $("evVirtual").checked }, { merge: true }); $("saveStatus").textContent = $("evVirtual").checked ? "Saved. Everyone will be asked for a mailing address." : "Saved."; }
+  catch (e) { $("evVirtual").checked = !$("evVirtual").checked; $("saveStatus").textContent = "Couldn't save. Check your connection and try again."; }
+});
 ["evName", "evBudget", "evKidBudget", "evDate"].forEach(id => $(id).addEventListener("input", () => {
   $("saveStatus").textContent = "Saving…"; clearTimeout(sTimer);
   sTimer = setTimeout(async () => {

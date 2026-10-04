@@ -38,6 +38,20 @@ service cloud.firestore {
         && secret.size() >= 20
         && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'joinedAt'])
         && shortText(request.resource.data.name, 40);
+      // The only thing a person can change later: "happy to buy for a kid too".
+      allow update: if notDrawn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kidVolunteer'])
+        && request.resource.data.kidVolunteer is bool;
+
+      // Kids a parent adds. Reachable only through the parent's secret link.
+      match /kids/{kidId} {
+        allow read: if true;
+        allow delete: if isOrganizer();
+        allow create: if notDrawn()
+          && exists(/databases/$(database)/documents/people/$(secret))
+          && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'createdAt'])
+          && shortText(request.resource.data.name, 40);
+      }
     }
 
     // Wishlists, keyed by a second secret that only the person and their Secret Santa learn.
@@ -60,7 +74,7 @@ service cloud.firestore {
       allow read: if true;
       allow delete: if isOrganizer();
       allow create: if notDrawn()
-        && request.resource.data.keys().hasOnly(['name', 'joinedAt'])
+        && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'kid'])
         && shortText(request.resource.data.name, 40);
     }
 

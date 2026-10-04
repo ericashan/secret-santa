@@ -15,7 +15,7 @@
     <div class="facts" id="facts"></div>
   </header>
 
-    <p id="fatal" class="msg err" hidden></p>
+  <p id="fatal" class="msg err" hidden></p>
 
   <!-- Your match -->
   <section id="matchSec" hidden>
@@ -26,12 +26,7 @@
         <span class="hint">Make sure nobody's looking at your screen.</span>
       </div>
       <div id="matchShown" hidden>
-        <div class="tag" id="tag">
-          <span class="label">You're buying a gift for</span>
-          <span class="to" id="tagTo"></span>
-          <span class="label" style="margin-top:10px">Their wishlist</span>
-          <p class="wish" id="tagWish"></p>
-        </div>
+        <div class="tags" id="tags"></div>
         <div class="row" style="margin-top:10px"><button class="ghost" id="hideMatch" type="button">Hide</button></div>
       </div>
       <p id="noMatch" class="hint" hidden>You joined after names were drawn, so you don't have a match. Ask the organizer.</p>
@@ -47,7 +42,7 @@
         <button class="primary" type="submit" id="joinBtn">Join</button>
       </form>
       <p id="joinMsg" class="msg err" hidden></p>
-      <p class="hint">No account needed. You'll get a personal link to come back to.</p>
+      <p class="hint">No account needed. You'll get a personal link to come back to. Adding a baby or child? Join yourself first, then add them.</p>
     </div>
   </section>
 
@@ -62,6 +57,23 @@
         <textarea id="myWish" placeholder="Sizes, favorite colors, books you want, links, things you don't want…" maxlength="4000"></textarea>
       </div>
       <p class="hint" id="wishStatus">Only the person who draws your name sees this. It saves as you type.</p>
+      <label class="check" id="volunteerRow"><input type="checkbox" id="volunteer"> I'm happy to buy for a kid too</label>
+      <p class="hint" id="volunteerHint">Kids get a gift but don't give one, so a few adults buy a second gift for a kid. Volunteers are picked first.</p>
+    </div>
+  </section>
+
+  <!-- Kids -->
+  <section id="kidsSec" hidden>
+    <h2>Your kids</h2>
+    <div class="panel">
+      <p class="hint">Add a baby or child who should get a gift. They won't buy for anyone. Their wishlist is yours to fill in.</p>
+      <div id="kidList" class="kidlist"></div>
+      <form id="kidForm" class="row" autocomplete="off">
+        <input id="kidName" placeholder="Child's name" aria-label="Child's name" maxlength="40">
+        <button type="submit" id="kidBtn">Add child</button>
+      </form>
+      <p id="kidMsg" class="msg err" hidden></p>
+      <p class="hint" id="kidRemoveHint">Need to remove a child? Ask the organizer.</p>
     </div>
   </section>
 
@@ -94,13 +106,13 @@ import { firebaseConfig } from "./firebase-config.js";
 import { showLoading, hideLoading } from "./santa-loader.js";
 
 const $ = id => document.getElementById(id);
-const S = { secret: null, me: null, game: {}, roster: [], myWish: null, match: undefined, matchWish: null, revealed: false };
+const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, kids: [], match: undefined, revealed: false };
 const LS = "secret-santa-link";
 let firstLoad = true;
 showLoading("Santa's fetching your group…", true);
 
 function fatal(t){ if (firstLoad) { firstLoad = false; hideLoading(); } const f = $("fatal"); f.textContent = t; f.hidden = false; }
-if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("This page isn't set up yet. The organizer still needs to add the Firebase settings (SETUP.md, step 4)."); throw new Error("not configured"); }
+if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("This page isn't set up yet. The organizer still needs to add the Firebase settings."); throw new Error("not configured"); }
 
 const db = getFirestore(initializeApp(firebaseConfig));
 
@@ -110,6 +122,27 @@ function fmtDate(d){ if(!d) return ""; const t = new Date(d + "T12:00:00"); retu
 const linkFor = s => location.origin + location.pathname + "#" + s;
 function store(k, v){ try { v ? localStorage.setItem(k, v) : localStorage.removeItem(k); } catch(e){} }
 function load(k){ try { return localStorage.getItem(k); } catch(e){ return null; } }
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+// Live wishlists by id (mine, my kids', and the people I'm buying for).
+const wishSubs = {};
+function watchWish(id){ if (!id || wishSubs[id]) return; wishSubs[id] = onSnapshot(doc(db, "wishes", id), w => { S.wishes[id] = w.exists() ? w.data() : null; render(); }); }
+function unwatchWishes(){ Object.keys(wishSubs).forEach(k => { wishSubs[k](); delete wishSubs[k]; }); S.wishes = {}; }
+
+// Autosave a wishlist: one write at a time, after a short pause in typing.
+const savers = {};
+function saveWish(id, value, statusEl){
+  const s = savers[id] || (savers[id] = { timer: null, busy: false, next: null });
+  statusEl.textContent = "Saving…"; s.next = value; clearTimeout(s.timer);
+  s.timer = setTimeout(async () => {
+    if (s.busy) return; s.busy = true;
+    while (s.next !== null) { const v = s.next; s.next = null;
+      try { await updateDoc(doc(db, "wishes", id), { wishlist: v }); statusEl.textContent = "Saved."; }
+      catch (e) { statusEl.textContent = "Couldn't save just now. Check your connection and keep typing to try again."; } }
+    s.busy = false;
+  }, 700);
+}
+function syncTextarea(ta, id){ const w = S.wishes[id]; if (w && document.activeElement !== ta && ta.value !== (w.wishlist || "")) ta.value = w.wishlist || ""; }
 
 let gotGame = false, gotRoster = false, gotMe = false;
 
@@ -120,44 +153,80 @@ function render(){
   $("title").textContent = g.ev || "Secret Santa";
   document.title = g.ev || "Secret Santa";
   const facts = $("facts"); facts.textContent = "";
-  const fact = (k, v) => { const s = document.createElement("span"); s.className = "fact"; s.append(k + " "); const b = document.createElement("b"); b.textContent = v; s.append(b); facts.append(s); };
+  const fact = (k, v) => { const s = el("span", "fact"); s.append(k + " "); s.append(el("b", null, v)); facts.append(s); };
   if (g.budget) fact("Limit", g.budget);
+  if (g.kidBudget) fact("Kids", g.kidBudget);
   if (g.date) fact("Exchange", fmtDate(g.date));
   fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
 
   $("joinSec").hidden = !!me || !!g.drawn;
   $("lateMsg").hidden = !(g.drawn && !me);
-  $("wishSec").hidden = $("linkSec").hidden = !me;
+  $("wishSec").hidden = $("linkSec").hidden = $("kidsSec").hidden = !me;
   $("matchSec").hidden = !(g.drawn && me);
   if (me) {
     $("hello").textContent = "Hi " + me.name + "! Your wishlist";
     $("myLink").textContent = linkFor(S.secret);
-    const ta = $("myWish");
-    if (S.myWish && document.activeElement !== ta && ta.value !== (S.myWish.wishlist || "")) ta.value = S.myWish.wishlist || "";
+    syncTextarea($("myWish"), me.wishId);
+    $("volunteer").checked = !!me.kidVolunteer;
+    $("volunteer").disabled = !!g.drawn;
+    $("kidForm").hidden = !!g.drawn;
+    renderKids();
   }
 
   $("peopleSec").hidden = false;
   const ppl = $("people"); ppl.textContent = "";
-  S.roster.forEach(r => { const c = document.createElement("span"); c.className = "chip"; c.append(r.name);
-    if (me && r.id === me.rosterId) { const y = document.createElement("span"); y.className = "you"; y.textContent = "you"; c.append(y); }
+  const myKidRoster = new Set(S.kids.map(k => k.rosterId));
+  S.roster.forEach(r => { const c = el("span", "chip", r.name);
+    if (r.kid) c.append(el("span", "you", "kid"));
+    if (me && r.id === me.rosterId) c.append(el("span", "you", "you"));
+    else if (myKidRoster.has(r.id)) c.append(el("span", "you", "yours"));
     ppl.append(c); });
-  $("peopleHint").textContent = S.roster.length ? S.roster.length + (S.roster.length === 1 ? " person has" : " people have") + " joined." : "Nobody has joined yet. Be the first!";
+  const kids = S.roster.filter(r => r.kid).length, adults = S.roster.length - kids;
+  $("peopleHint").textContent = S.roster.length ? adults + (adults === 1 ? " adult" : " adults") + (kids ? " and " + kids + (kids === 1 ? " kid" : " kids") : "") + " so far." : "Nobody has joined yet. Be the first!";
 
   renderMatch();
 }
 
+function renderKids(){
+  const list = $("kidList");
+  // Keep existing rows (and any typing in progress); add or remove rows to match.
+  const want = new Set(S.kids.map(k => k.id));
+  [...list.children].forEach(row => { if (!want.has(row.dataset.id)) row.remove(); });
+  S.kids.forEach(k => {
+    let row = list.querySelector('[data-id="' + k.id + '"]');
+    if (!row) {
+      row = el("div", "kidrow"); row.dataset.id = k.id;
+      row.append(el("span", "label", k.name + "'s wishlist"));
+      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = "Age, sizes, favorite characters, what they already have…"; ta.setAttribute("aria-label", k.name + "'s wishlist");
+      const st = el("p", "hint", "Saves as you type.");
+      ta.addEventListener("input", () => saveWish(k.wishId, ta.value, st));
+      row.append(ta, st); list.append(row);
+    }
+    syncTextarea(row.querySelector("textarea"), k.wishId);
+  });
+  $("kidRemoveHint").hidden = !S.kids.length;
+}
+
 function renderMatch(){
   if (!(S.game.drawn && S.me)) return;
-  const has = !!S.match;
+  const gifts = (S.match && S.match.gifts) || [];
+  const has = gifts.length > 0;
   $("noMatch").hidden = has || S.match === undefined;
   $("matchHidden").hidden = !has || S.revealed;
   $("matchShown").hidden = !has || !S.revealed;
-  if (has && S.revealed) {
-    $("tagTo").textContent = S.match.name;
-    const w = $("tagWish"), txt = S.matchWish && S.matchWish.wishlist && S.matchWish.wishlist.trim();
-    w.textContent = txt || "No wishlist yet. Check back later.";
-    w.classList.toggle("none", !txt);
-  }
+  if (!(has && S.revealed)) return;
+  const box = $("tags"); box.textContent = "";
+  gifts.forEach((gft, i) => {
+    const t = el("div", "tag");
+    t.append(el("span", "label", gft.kid ? (i ? "You're also buying for a kid" : "You're buying for a kid") : "You're buying a gift for"));
+    t.append(el("span", "to", gft.name));
+    const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
+    if (lim) t.append(el("span", "hint", "Spending limit " + lim));
+    const lab = el("span", "label", gft.kid ? "Their wishlist (from their parent)" : "Their wishlist"); lab.style.marginTop = "10px"; t.append(lab);
+    const w = S.wishes[gft.wishId], txt = w && w.wishlist && w.wishlist.trim();
+    t.append(el("p", "wish" + (txt ? "" : " none"), txt || "No wishlist yet. Check back later."));
+    box.append(t);
+  });
 }
 
 // ---------- Subscriptions ----------
@@ -168,26 +237,25 @@ onSnapshot(collection(db, "roster"), s => { S.roster = s.docs.map(d => ({ id: d.
 
 let unsubs = [];
 function watchMe(secret){
-  unsubs.forEach(u => u()); unsubs = [];
+  unsubs.forEach(u => u()); unsubs = []; unwatchWishes(); S.kids = []; S.match = undefined; $("kidList").textContent = "";
   S.secret = secret;
   if (!secret) { S.me = null; gotMe = true; render(); return; }
   showLoading("Finding your name on the list…");
   getDoc(doc(db, "people", secret)).then(s => {
     if (!s.exists()) { S.me = null; S.secret = null; store(LS, null); if (location.hash) history.replaceState(null, "", location.pathname); gotMe = true; render(); return; }
-    S.me = s.data(); gotMe = true;
+    gotMe = true;
     store(LS, secret);
     if (location.hash.slice(1) !== secret) history.replaceState(null, "", "#" + secret);
-    unsubs.push(onSnapshot(doc(db, "wishes", S.me.wishId), w => { S.myWish = w.exists() ? w.data() : null; render(); }));
-    let matchWishUnsub = null;
+    unsubs.push(onSnapshot(doc(db, "people", secret), p => { S.me = p.exists() ? p.data() : null; if (S.me) watchWish(S.me.wishId); render(); }));
+    unsubs.push(onSnapshot(collection(db, "people", secret, "kids"), ks => {
+      S.kids = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      S.kids.forEach(k => watchWish(k.wishId)); render();
+    }));
     unsubs.push(onSnapshot(doc(db, "matches", secret), m => {
       S.match = m.exists() ? m.data() : null;
-      if (matchWishUnsub) { matchWishUnsub(); matchWishUnsub = null; }
-      S.matchWish = null;
-      if (S.match) matchWishUnsub = onSnapshot(doc(db, "wishes", S.match.wishId), w => { S.matchWish = w.exists() ? w.data() : null; renderMatch(); });
+      ((S.match && S.match.gifts) || []).forEach(g => watchWish(g.wishId));
       render();
     }));
-    unsubs.push(() => matchWishUnsub && matchWishUnsub());
-    render();
   }).catch(() => fatal("Couldn't load your details. Check your connection and reload.")).finally(hideLoading);
 }
 
@@ -196,11 +264,13 @@ watchMe(/^[A-Za-z0-9]{20,}$/.test(fromHash) ? fromHash : load(LS));
 window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (/^[A-Za-z0-9]{20,}$/.test(h) && h !== S.secret) { gotMe = false; watchMe(h); } });
 
 // ---------- Actions ----------
+const nameTaken = name => S.roster.some(r => r.name.toLowerCase() === name.toLowerCase());
+
 $("joinForm").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("joinName").value.trim().replace(/\s+/g, " ");
   if (!name) { msg("joinMsg", "err", "Type your name first."); return; }
-  if (S.roster.some(r => r.name.toLowerCase() === name.toLowerCase())) { msg("joinMsg", "err", name + " is already on the list. Add a last initial, or open your personal link if that's you."); return; }
+  if (nameTaken(name)) { msg("joinMsg", "err", name + " is already on the list. Add a last initial, or open your personal link if that's you."); return; }
   $("joinBtn").disabled = true; msg("joinMsg", "", "");
   const secret = randomId(), wishId = randomId(), rosterId = randomId(16), joinedAt = new Date().toISOString();
   const b = writeBatch(db);
@@ -214,13 +284,30 @@ $("joinForm").addEventListener("submit", async e => {
   $("joinBtn").disabled = false;
 });
 
-let wTimer = null, wBusy = false, wNext = null;
-async function flushWish(){ if (wBusy) return; wBusy = true;
-  while (wNext !== null) { const v = wNext; wNext = null;
-    try { await updateDoc(doc(db, "wishes", S.me.wishId), { wishlist: v }); $("wishStatus").textContent = "Saved. Only the person who draws your name sees this."; }
-    catch (e) { $("wishStatus").textContent = "Couldn't save just now. Check your connection and keep typing to try again."; } }
-  wBusy = false; }
-$("myWish").addEventListener("input", () => { $("wishStatus").textContent = "Saving…"; wNext = $("myWish").value; clearTimeout(wTimer); wTimer = setTimeout(flushWish, 700); });
+$("kidForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("kidName").value.trim().replace(/\s+/g, " ");
+  if (!name) { msg("kidMsg", "err", "Type your child's name first."); return; }
+  if (nameTaken(name)) { msg("kidMsg", "err", name + " is already on the list. Add a last initial to tell them apart."); return; }
+  $("kidBtn").disabled = true; msg("kidMsg", "", "");
+  const kidId = randomId(16), wishId = randomId(), rosterId = randomId(16), createdAt = new Date().toISOString();
+  const b = writeBatch(db);
+  b.set(doc(db, "people", S.secret, "kids", kidId), { name, wishId, rosterId, createdAt });
+  b.set(doc(db, "wishes", wishId), { name, wishlist: "" });
+  b.set(doc(db, "roster", rosterId), { name, joinedAt: createdAt, kid: true });
+  showLoading("Adding " + name + " to Santa's list…");
+  try { await b.commit(); $("kidName").value = ""; }
+  catch (err) { msg("kidMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't add a child now." : "Couldn't add " + name + ". Check your connection and try again."); }
+  finally { hideLoading(); }
+  $("kidBtn").disabled = false;
+});
+
+$("myWish").addEventListener("input", () => saveWish(S.me.wishId, $("myWish").value, $("wishStatus")));
+$("volunteer").addEventListener("change", async () => {
+  const v = $("volunteer").checked;
+  try { await updateDoc(doc(db, "people", S.secret), { kidVolunteer: v }); $("volunteerHint").textContent = v ? "Thanks! You may get a kid to buy for as well." : "Kids get a gift but don't give one, so a few adults buy a second gift for a kid. Volunteers are picked first."; }
+  catch (e) { $("volunteer").checked = !v; $("volunteerHint").textContent = "Couldn't save that. Try again."; }
+});
 
 $("copyLink").addEventListener("click", async () => {
   const b = $("copyLink");
@@ -228,7 +315,7 @@ $("copyLink").addEventListener("click", async () => {
   catch (e) { const r = document.createRange(); r.selectNodeContents($("myLink")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = "Selected. Copy it now"; }
   setTimeout(() => b.textContent = "Copy link", 2000);
 });
-$("revealBtn").addEventListener("click", () => { S.revealed = true; renderMatch(); const t = $("tag"); t.classList.remove("show"); void t.offsetWidth; t.classList.add("show"); });
+$("revealBtn").addEventListener("click", () => { S.revealed = true; renderMatch(); $("tags").querySelectorAll(".tag").forEach(t => t.classList.add("show")); });
 $("hideMatch").addEventListener("click", () => { S.revealed = false; renderMatch(); });
 </script>
 </body>

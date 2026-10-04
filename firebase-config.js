@@ -1,10 +1,10 @@
-// Paste the settings from your Firebase project here (see SETUP.md, step 4).
-// These values are safe to publish. Your security rules protect the data.
+// Firebase settings for this site. These values are safe to publish.
+// Your security rules protect the data.
 export const firebaseConfig = {
-  apiKey: "PASTE_API_KEY",
-  authDomain: "PASTE_PROJECT_ID.firebaseapp.com",
-  projectId: "PASTE_PROJECT_ID",
-  storageBucket: "PASTE_PROJECT_ID.appspot.com",
-  messagingSenderId: "PASTE_SENDER_ID",
-  appId: "PASTE_APP_ID"
+  apiKey: "AIzaSyA6LxLWohQetZQ2PXa9UPkzpIVaN9HMURc",
+  authDomain: "secret-santa-bf5be.firebaseapp.com",
+  projectId: "secret-santa-bf5be",
+  storageBucket: "secret-santa-bf5be.firebasestorage.app",
+  messagingSenderId: "49101063442",
+  appId: "1:49101063442:web:899b47ae3675ce2cc0dfcb"
 };

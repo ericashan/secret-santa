@@ -98,6 +98,7 @@ import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signO
 import { firebaseConfig } from "./firebase-config.js";
 import { showLoading, hideLoading } from "./santa-loader.js";
 import { drawAll } from "./draw.js";
+import { babyIcon } from "./icons.js";
 
 const $ = id => document.getElementById(id);
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -174,7 +175,7 @@ function render(){
     it.append(w, row); list.append(it);
     (S.kids[id] || []).forEach(k => {
       const ki = el("div", "item child");
-      const kw = el("span", "who", k.name); kw.append(" "); kw.append(el("span", "badge", "kid"));
+      const kw = el("span", "who namewithicon"); kw.append(babyIcon(), k.name);
       ki.append(kw);
       if (!g.drawn) { const r = el("button", "small ghost", "Remove"); r.type = "button"; r.onclick = () => removeKid(id, k); ki.append(r); }
       list.append(ki);

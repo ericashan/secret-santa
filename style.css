@@ -109,3 +109,11 @@ footer a{color:var(--muted)}
 .item.child .who::before{content:"↳ ";color:var(--muted)}
 .grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px}
 @media (max-width:460px){.grid2{grid-template-columns:1fr}}
+
+/* Baby icon */
+.baby-icon{display:inline-flex;vertical-align:-3px;margin-right:4px;flex:none}
+.baby-icon svg{display:block}
+.baby-icon.big svg{width:.8em;height:.8em}
+.baby-icon.big{vertical-align:-.05em;margin-right:.15em}
+.namewithicon{display:inline-flex;align-items:center;gap:2px}
+.label.namewithicon{text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--ink)}

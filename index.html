@@ -66,12 +66,16 @@
   <section id="kidsSec" hidden>
     <h2>Your kids</h2>
     <div class="panel">
-      <p class="hint">Add a baby or child who should get a gift. They won't buy for anyone. Their wishlist is yours to fill in.</p>
+      <p class="hint">Add a baby or child who should get a gift. They won't buy for anyone. Only one parent needs to add each child, and their wishlist is yours to fill in.</p>
       <div id="kidList" class="kidlist"></div>
       <form id="kidForm" class="row" autocomplete="off">
         <input id="kidName" placeholder="Child's name" aria-label="Child's name" maxlength="40">
         <button type="submit" id="kidBtn">Add child</button>
       </form>
+      <div class="confirm" id="kidConfirm" hidden>
+        <span id="kidConfirmText"></span>
+        <div class="row"><button type="button" class="primary" id="kidSame">Yes, same child</button><button type="button" id="kidDifferent">No, add a different child</button></div>
+      </div>
       <p id="kidMsg" class="msg err" hidden></p>
       <p class="hint" id="kidRemoveHint">Need to remove a child? Ask the organizer.</p>
     </div>
@@ -104,6 +108,7 @@ import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/fireba
 import { getFirestore, doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { firebaseConfig } from "./firebase-config.js";
 import { showLoading, hideLoading } from "./santa-loader.js";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js";
 
 const $ = id => document.getElementById(id);
 const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, kids: [], match: undefined, revealed: false };
@@ -176,8 +181,9 @@ function render(){
   $("peopleSec").hidden = false;
   const ppl = $("people"); ppl.textContent = "";
   const myKidRoster = new Set(S.kids.map(k => k.rosterId));
-  S.roster.forEach(r => { const c = el("span", "chip", r.name);
-    if (r.kid) c.append(el("span", "you", "kid"));
+  S.roster.forEach(r => { const c = el("span", "chip");
+    if (r.kid) c.append(babyIcon());
+    c.append(r.name);
     if (me && r.id === me.rosterId) c.append(el("span", "you", "you"));
     else if (myKidRoster.has(r.id)) c.append(el("span", "you", "yours"));
     ppl.append(c); });
@@ -196,7 +202,7 @@ function renderKids(){
     let row = list.querySelector('[data-id="' + k.id + '"]');
     if (!row) {
       row = el("div", "kidrow"); row.dataset.id = k.id;
-      row.append(el("span", "label", k.name + "'s wishlist"));
+      const head = el("span", "label namewithicon"); head.append(babyIcon(), k.name + "'s wishlist"); row.append(head);
       const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = "Age, sizes, favorite characters, what they already have…"; ta.setAttribute("aria-label", k.name + "'s wishlist");
       const st = el("p", "hint", "Saves as you type.");
       ta.addEventListener("input", () => saveWish(k.wishId, ta.value, st));
@@ -219,7 +225,7 @@ function renderMatch(){
   gifts.forEach((gft, i) => {
     const t = el("div", "tag");
     t.append(el("span", "label", gft.kid ? (i ? "You're also buying for a kid" : "You're buying for a kid") : "You're buying a gift for"));
-    t.append(el("span", "to", gft.name));
+    const to = el("span", "to", gft.name); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
     const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
     if (lim) t.append(el("span", "hint", "Spending limit " + lim));
     const lab = el("span", "label", gft.kid ? "Their wishlist (from their parent)" : "Their wishlist"); lab.style.marginTop = "10px"; t.append(lab);
@@ -284,23 +290,52 @@ $("joinForm").addEventListener("submit", async e => {
   $("joinBtn").disabled = false;
 });
 
-$("kidForm").addEventListener("submit", async e => {
+let pendingKid = null;
+function hideKidConfirm(){ $("kidConfirm").hidden = true; pendingKid = null; }
+$("kidName").addEventListener("input", () => { hideKidConfirm(); msg("kidMsg", "", ""); });
+$("kidForm").addEventListener("submit", e => {
   e.preventDefault();
   const name = $("kidName").value.trim().replace(/\s+/g, " ");
   if (!name) { msg("kidMsg", "err", "Type your child's name first."); return; }
-  if (nameTaken(name)) { msg("kidMsg", "err", name + " is already on the list. Add a last initial to tell them apart."); return; }
+  const n = normName(name);
+  if (S.kids.some(k => normName(k.name) === n)) { msg("kidMsg", "err", "You've already added " + name + "."); return; }
+  const same = S.roster.find(r => normName(r.name) === n);
+  if (same) {
+    msg("kidMsg", "err", same.kid
+      ? name + " is already on the list" + (same.parentName ? ", added by " + same.parentName : "") + ". If that's the same child, you're all set. If not, add a last initial to tell them apart."
+      : "Someone named " + same.name + " is already on the list. Add a last initial to tell them apart.");
+    return;
+  }
+  // Same first name as a kid someone else added? Ask before adding.
+  const similar = S.roster.find(r => r.kid && firstName(r.name) === firstName(name));
+  if (similar) {
+    pendingKid = name;
+    $("kidConfirmText").textContent = "There's already a kid named " + similar.name + " on the list" + (similar.parentName ? ", added by " + similar.parentName : "") + ". Is that the same child as " + name + "?";
+    $("kidConfirm").hidden = false; msg("kidMsg", "", "");
+    return;
+  }
+  addKid(name);
+});
+$("kidSame").addEventListener("click", () => { hideKidConfirm(); $("kidName").value = ""; msg("kidMsg", "ok", "Great, no need to add them again. They're already on the list."); });
+$("kidDifferent").addEventListener("click", () => { const name = pendingKid; hideKidConfirm(); if (name) addKid(name); });
+
+async function addKid(name){
   $("kidBtn").disabled = true; msg("kidMsg", "", "");
-  const kidId = randomId(16), wishId = randomId(), rosterId = randomId(16), createdAt = new Date().toISOString();
+  const kidId = randomId(16), wishId = randomId(), rosterId = kidRosterId(name) || ("kid-" + randomId(16)), createdAt = new Date().toISOString();
   const b = writeBatch(db);
   b.set(doc(db, "people", S.secret, "kids", kidId), { name, wishId, rosterId, createdAt });
   b.set(doc(db, "wishes", wishId), { name, wishlist: "" });
-  b.set(doc(db, "roster", rosterId), { name, joinedAt: createdAt, kid: true });
+  b.set(doc(db, "roster", rosterId), { name, joinedAt: createdAt, kid: true, parentName: S.me.name });
   showLoading("Adding " + name + " to Santa's list…");
   try { await b.commit(); $("kidName").value = ""; }
-  catch (err) { msg("kidMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't add a child now." : "Couldn't add " + name + ". Check your connection and try again."); }
+  catch (err) {
+    msg("kidMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't add a child now."
+      : err && err.code === "permission-denied" ? name + " was just added by someone else. If that's a different child, add a last initial."
+      : "Couldn't add " + name + ". Check your connection and try again.");
+  }
   finally { hideLoading(); }
   $("kidBtn").disabled = false;
-});
+}
 
 $("myWish").addEventListener("input", () => saveWish(S.me.wishId, $("myWish").value, $("wishStatus")));
 $("volunteer").addEventListener("change", async () => {

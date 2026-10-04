@@ -74,7 +74,7 @@ service cloud.firestore {
       allow read: if true;
       allow delete: if isOrganizer();
       allow create: if notDrawn()
-        && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'kid'])
+        && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'kid', 'parentName'])
         && shortText(request.resource.data.name, 40);
     }
 

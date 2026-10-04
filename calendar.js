@@ -1,7 +1,7 @@
 // "Add to calendar" for the exchange date: Google Calendar, or a calendar file
 // that Apple Calendar, Outlook and most other calendar apps can open.
-import { formatMoney, currencyOf } from "./app.js?v=202610041142";
-import { t } from "./i18n.js?v=202610041142";
+import { formatMoney, currencyOf } from "./app.js?v=202610041152";
+import { t } from "./i18n.js?v=202610041152";
 
 const ymd = d => d.replace(/-/g, "");
 function nextDay(d){ const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); }

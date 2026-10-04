@@ -240,3 +240,4 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .money input:focus-visible{outline:none}
 .invitebtn{display:inline-flex;align-items:center;gap:6px}
 .invitebtn svg{color:var(--accent)}
+.navfoot{margin-top:auto;border-top:1px solid var(--line);padding-top:8px}

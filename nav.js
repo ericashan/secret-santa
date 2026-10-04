@@ -1,6 +1,6 @@
 // Slide-out menu on every page: home, start a group, and all your groups.
-import { t } from "./i18n.js?v=202610041142";
-import { localGroups, personalLink, organizeLink, groupLink, homeLink, groupIdFromUrl } from "./app.js?v=202610041142";
+import { t } from "./i18n.js?v=202610041152";
+import { localGroups, personalLink, organizeLink, groupLink, homeLink, groupIdFromUrl } from "./app.js?v=202610041152";
 
 const MENU_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M4 7h16M4 12h16M4 17h16" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
 const CLOSE_ICON = '<svg viewBox="0 0 24 24" width="20" height="20" aria-hidden="true" focusable="false"><path d="M6 6l12 12M18 6 6 18" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>';
@@ -68,5 +68,8 @@ export function mountNav(){
       sec.append(item);
     });
     drawer.append(sec);
+    const foot = el("div", "navsection navfoot");
+    foot.append(link(homeLink() + "privacy.html", t("Privacy policy"), "navsub", here === "privacy.html"));
+    drawer.append(foot);
   }
 }

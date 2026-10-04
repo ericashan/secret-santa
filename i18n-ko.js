@@ -406,5 +406,6 @@ export default {
   "Currency": "통화",
   "Invite": "초대",
   "Invite people to {name}": "{name}에 사람들 초대하기",
-  "Invite link copied": "초대 링크를 복사했어요"
+  "Invite link copied": "초대 링크를 복사했어요",
+  "Privacy policy": "개인정보 처리방침"
 };

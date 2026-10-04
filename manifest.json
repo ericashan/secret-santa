@@ -1,0 +1,19 @@
+{
+  "id": "./",
+  "name": "Secret Santa",
+  "short_name": "Secret Santa",
+  "description": "Run a Secret Santa gift exchange with family and friends: join with a link, share wishlists, and draw names.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#eef2f1",
+  "theme_color": "#b3263e",
+  "lang": "en",
+  "categories": ["lifestyle", "social"],
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

@@ -3,6 +3,12 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="theme-color" content="#b3263e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://www.gstatic.com">
 <link rel="preconnect" href="https://firestore.googleapis.com">
@@ -11,16 +17,16 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js">
-<link rel="modulepreload" href="./app.js?v=202610041142">
-<link rel="modulepreload" href="./i18n.js?v=202610041142">
-<link rel="modulepreload" href="./santa-loader.js?v=202610041142">
-<link rel="modulepreload" href="./nav.js?v=202610041142">
-<link rel="modulepreload" href="./calendar.js?v=202610041142">
-<link rel="modulepreload" href="./firebase-config.js?v=202610041142">
+<link rel="modulepreload" href="./app.js?v=202610041152">
+<link rel="modulepreload" href="./i18n.js?v=202610041152">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041152">
+<link rel="modulepreload" href="./nav.js?v=202610041152">
+<link rel="modulepreload" href="./calendar.js?v=202610041152">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041152">
 <!-- Fonts load without holding up the page -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=202610041142">
+<link rel="stylesheet" href="style.css?v=202610041152">
 </head>
 <body>
 <div class="wrap">
@@ -91,15 +97,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, loadAuth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite, formatMoney, currencyOf } from "./app.js?v=202610041142";
+         copyText, canShare, shareInvite, formatMoney, currencyOf } from "./app.js?v=202610041152";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041142";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041152";
 window.__ssReady = true;
 const { onAuthStateChanged } = (await loadAuth()) || {};
-import { calendarIcon } from "./calendar.js?v=202610041142";
-import { t, startTranslating } from "./i18n.js?v=202610041142";
+import { calendarIcon } from "./calendar.js?v=202610041152";
+import { t, startTranslating } from "./i18n.js?v=202610041152";
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041142";
+import { mountNav } from "./nav.js?v=202610041152";
 mountNav();
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }

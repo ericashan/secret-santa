@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=202610041013">
 </head>
 <body>
 <div class="wrap">
@@ -104,12 +104,19 @@
   <footer class="row"><a href="./">My groups</a><a href="#" id="orgLink" hidden>Organize this group</a></footer>
 </div>
 
+<script>
+// If the page's code doesn't start (for example, an old copy is stuck in the browser), say so instead of sitting silently.
+setTimeout(function(){ if (window.__ssReady) return; var d=document.createElement("div"); d.className="stalled";
+  d.innerHTML='<p>This page didn\'t finish loading.</p><button type="button">Refresh</button>';
+  d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
+</script>
 <script type="module">
 import { configured, db, $, el, msg, randomId, fmtDate, personalLink, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js";
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041013";
 import { doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041013";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041013";
+window.__ssReady = true;
 
 const GID = groupIdFromUrl();
 if (!GID) { location.replace(homeLink()); throw new Error("no group"); }

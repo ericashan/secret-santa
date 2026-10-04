@@ -142,3 +142,5 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .photoempty{aspect-ratio:16/7;max-height:180px;border:2px dashed var(--line);border-radius:14px;display:grid;place-items:center;color:var(--muted);font-size:.9rem;text-align:center;padding:12px}
 .filebtn{position:relative;overflow:hidden}
 .filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}
+.stalled{position:fixed;left:16px;right:16px;bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:60;background:var(--paper);border:1px solid var(--line);border-radius:14px;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 10px 30px rgba(0,0,0,.15)}
+.stalled p{margin:0;font-weight:600}

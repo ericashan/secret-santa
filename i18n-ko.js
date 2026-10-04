@@ -333,5 +333,12 @@ export default {
   "No number yet: {names}": "번호 미입력: {names}",
   "Once people add their numbers, you can text them all from here.": "사람들이 번호를 입력하면 여기서 한 번에 문자를 보낼 수 있어요.",
   "Text everyone ({n})": "모두에게 문자 보내기 ({n}명)",
-  "Text people {from}–{to}": "{from}–{to}번째 사람에게 문자 보내기"
+  "Text people {from}–{to}": "{from}–{to}번째 사람에게 문자 보내기",
+
+  // ---------- Menu ----------
+  "Menu": "메뉴",
+  "Close menu": "메뉴 닫기",
+  "Your groups": "내 그룹 목록",
+  "Groups you join or organize will show up here.": "참여하거나 주최하는 그룹이 여기에 표시돼요.",
+  "My page": "내 페이지"
 };

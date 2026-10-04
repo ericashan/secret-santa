@@ -2,8 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { t, locale } from "./i18n.js?v=202610041048";
-import { firebaseConfig } from "./firebase-config.js?v=202610041048";
+import { t, locale } from "./i18n.js?v=202610041058";
+import { firebaseConfig } from "./firebase-config.js?v=202610041058";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -57,7 +57,9 @@ const KEY = "ss-my-groups";
 export function localGroups(){ try { return JSON.parse(localStorage.getItem(KEY) || "{}") || {}; } catch (e) { return {}; } }
 function saveLocal(m){ try { localStorage.setItem(KEY, JSON.stringify(m)); } catch (e) {} }
 
+const defined = o => Object.fromEntries(Object.entries(o || {}).filter(([, v]) => v !== undefined));
 function mergeEntry(a = {}, b = {}){
+  a = defined(a); b = defined(b);
   const newer = (b.updated || 0) >= (a.updated || 0) ? b : a, older = newer === b ? a : b;
   return { ...older, ...newer, secret: ("secret" in newer && newer.secret === null && newer.myName === null) ? null : (newer.secret || older.secret || null), organizer: !!(a.organizer || b.organizer) };
 }

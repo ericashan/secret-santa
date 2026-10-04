@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041048">
+<link rel="stylesheet" href="style.css?v=202610041058">
 </head>
 <body>
 <div class="wrap">
@@ -70,14 +70,16 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite, smsHref } from "./app.js?v=202610041048";
+         copyText, canShare, shareInvite } from "./app.js?v=202610041058";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041048";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041058";
 window.__ssReady = true;
-import { calendarButton } from "./calendar.js?v=202610041048";
-import { t, startTranslating } from "./i18n.js?v=202610041048";
+import { calendarMenu, calendarIcon } from "./calendar.js?v=202610041058";
+import { t, startTranslating } from "./i18n.js?v=202610041058";
 startTranslating();
+import { mountNav } from "./nav.js?v=202610041058";
+mountNav();
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }
 
@@ -125,13 +127,15 @@ function render(){
       card.append(el("p", "hint", "This group no longer exists. The organizer may have deleted it."));
     } else {
       const facts = el("div", "facts");
-      const fact = (k, v, raw) => { const s = el("span", "fact"); s.append(k + " "); const b = el("b", null, v); if (raw) b.setAttribute("translate", "no"); s.append(b); facts.append(s); };
+      const fact = (k, v, raw) => { const s = el("span", "fact"); s.append(k + " "); const b = el("b", null, v); if (raw) b.setAttribute("translate", "no"); s.append(b); facts.append(s); return s; };
       if (g && g.budget) fact("Limit", g.budget);
-      if (g && g.date) fact("Exchange", fmtDate(g.date));
+      const dateChip = g && g.date ? fact("Exchange", fmtDate(g.date)) : null;
+      const calMenu = dateChip ? calendarMenu(g, groupLink(gid), gid) : null;
+      if (dateChip) dateChip.append(calendarIcon(calMenu));
       if (m.organizer) fact("You", "organize");
       if (m.myName) fact("In as", m.myName, true);
       if (facts.childNodes.length) card.append(facts);
-      if (g && g.date) card.append(calendarButton(g, groupLink(gid), gid));
+      if (calMenu) card.append(calMenu);
     }
 
     const actions = el("div", "row");
@@ -148,7 +152,6 @@ function render(){
       const btns = el("div", "row");
       const url = groupLink(gid);
       if (canShare()) { const sb = el("button", "small", "Share…"); sb.type = "button"; sb.onclick = () => shareInvite(name, url); btns.append(sb); }
-      const tx = el("a", "button small", "Text it"); tx.href = smsHref(name, url); btns.append(tx);
       const cp = el("button", "small", "Copy link"); cp.type = "button"; cp.onclick = () => copyText(url, cp, "Copy link"); btns.append(cp);
       shareRow.append(btns);
     }
@@ -195,7 +198,10 @@ $("startBtn").onclick = async () => {
   $("createSec").hidden = false; $("groupName").focus();
   $("createSec").scrollIntoView({ behavior: "smooth", block: "start" });
 };
-$("cancelCreate").onclick = () => { $("createSec").hidden = true; };
+$("cancelCreate").onclick = () => { $("createSec").hidden = true; if (location.hash === "#start") history.replaceState(null, "", location.pathname); };
+// "Start a group" from the menu on any page lands here with #start.
+const openStartFromHash = () => { if (location.hash === "#start") $("startBtn").click(); };
+window.addEventListener("hashchange", openStartFromHash); openStartFromHash();
 $("createForm").addEventListener("submit", async e => {
   e.preventDefault();
   const name = $("groupName").value.trim().replace(/\s+/g, " ");

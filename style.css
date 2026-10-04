@@ -171,3 +171,34 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 /* Join form & group texts */
 .joinform{display:flex;flex-direction:column;gap:10px}
 #textBody{min-height:110px}
+
+/* Top bar: menu button + language picker */
+.langbar.topbar{justify-content:space-between;align-items:center}
+.navbtn{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:6px 14px 6px 10px;font-size:.9rem}
+/* Slide-out menu */
+.navbackdrop{position:fixed;inset:0;z-index:70;background:rgba(10,20,16,.35);opacity:0;transition:opacity .2s}
+.navbackdrop.open{opacity:1}
+.navdrawer{position:fixed;top:0;bottom:0;left:0;z-index:71;width:min(320px,86vw);background:var(--paper);border-right:1px solid var(--line);
+  padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));overflow-y:auto;display:flex;flex-direction:column;gap:18px;
+  transform:translateX(-100%);transition:transform .2s ease;box-shadow:0 0 40px rgba(0,0,0,.15)}
+.navdrawer.open{transform:none}
+@media (prefers-reduced-motion:reduce){.navdrawer,.navbackdrop{transition:none}}
+.navhead{display:flex;align-items:center;justify-content:space-between}
+.navtitle{font-family:var(--display);font-size:1.5rem;color:var(--accent)}
+.navclose{border:none;background:transparent;padding:8px;color:var(--muted);display:inline-flex}
+.navsection{display:flex;flex-direction:column;gap:4px}
+.navsection .label{margin:6px 0 4px}
+.navlink{display:block;text-decoration:none;color:var(--ink);font-weight:600;padding:10px 12px;border-radius:10px}
+.navlink:hover,.navlink:focus-visible{background:var(--soft)}
+.navlink[aria-current="page"]{background:var(--soft);color:var(--accent)}
+.navgroup{display:flex;flex-direction:column;border-radius:12px;padding:2px 0}
+.navgroup.here{background:color-mix(in srgb,var(--soft) 60%,transparent)}
+.navgroupname{overflow-wrap:anywhere}
+.navsubs{display:flex;flex-wrap:wrap;gap:4px;padding:0 0 6px 12px}
+.navsub{font-weight:500;font-size:.9rem;padding:6px 10px;color:var(--muted)}
+/* Calendar icon on the date */
+.fact .calicon{border:none;background:transparent;padding:2px 2px 2px 6px;margin-left:2px;color:var(--accent);display:inline-flex;vertical-align:middle;cursor:pointer}
+.fact .calicon:focus-visible{outline:3px solid var(--gold);outline-offset:1px;border-radius:6px}
+.calmenu{display:flex;flex-wrap:wrap;gap:8px;margin-top:8px}
+.calmenu .button,.calmenu button{display:inline-flex;align-items:center;gap:6px}
+.ico{display:inline-flex}

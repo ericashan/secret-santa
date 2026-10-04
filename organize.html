@@ -6,7 +6,7 @@
 <title>Secret Santa Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041048">
+<link rel="stylesheet" href="style.css?v=202610041058">
 </head>
 <body>
 <div class="wrap">
@@ -32,7 +32,6 @@
         <div class="linkbox" id="inviteLink" translate="no"></div>
         <div class="row">
           <button type="button" class="small" id="shareInvite" hidden>Share…</button>
-          <a class="button small" id="textInvite" href="#">Text it</a>
           <button type="button" class="small" id="copyInvite">Copy invite link</button>
         </div>
       </div>
@@ -150,16 +149,18 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 </script>
 <script type="module">
 import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
-         canShare, shareInvite, smsHref, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041048";
+         canShare, shareInvite, photoToDataUrl, photoError,
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041058";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041048";
-import { drawAll } from "./draw.js?v=202610041048";
-import { babyIcon } from "./icons.js?v=202610041048";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041058";
+import { drawAll } from "./draw.js?v=202610041058";
+import { babyIcon } from "./icons.js?v=202610041058";
 window.__ssReady = true;
-import { t, startTranslating, locale } from "./i18n.js?v=202610041048";
+import { t, startTranslating, locale } from "./i18n.js?v=202610041058";
 startTranslating();
+import { mountNav } from "./nav.js?v=202610041058";
+mountNav();
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
 if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }
@@ -180,8 +181,6 @@ $("inviteLink").textContent = invite;
 $("copyInvite").onclick = () => copy(invite, $("copyInvite"), "Copy invite link");
 $("shareInvite").hidden = !canShare();
 $("shareInvite").onclick = () => shareInvite(S.game.ev, invite);
-function updateTextLink(){ $("textInvite").href = smsHref(S.game.ev, invite); }
-updateTextLink();
 
 // ---------- Group photo ----------
 function showPhoto(data){
@@ -228,7 +227,7 @@ async function openOrganizer(user){
   rememberGroup(GID, { organizer: true, groupName: gs.data().ev });
   $("who").textContent = t("Signed in as {who}", { who: user.email });
   $("app").hidden = false;
-  unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); updateTextLink(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
   unsubs.push(onSnapshot(GC("phones"), s => { const ph = {}; s.docs.forEach(d => ph[d.id] = d.data().phone); S.phones = ph; renderTexts(); }, () => {}));
   unsubs.push(onSnapshot(G("public", "photo"), s => showPhoto(s.exists() ? s.data().data : null), () => {}));
   unsubs.push(onSnapshot(G("admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
@@ -394,7 +393,6 @@ $("deleteYes").onclick = async () => {
 // ---------- Text everyone ----------
 const BATCH = 20;   // many phones cap group texts around 20 people
 const TEMPLATES = [
-  { id: "invite", label: "Invite people to join", show: g => !g.drawn, text: g => t("Join our Secret Santa: {group}! Add your name here: {link}", { group: g.ev, link: invite }) },
   { id: "wishlist", label: "Reminder: add your wishlist", show: () => true, text: g => t("Reminder for {group}: add your wishlist so your Secret Santa knows what to get you. {link}", { group: g.ev, link: invite }) },
   { id: "drawn", label: "Names are drawn", show: g => !!g.drawn, text: g => t("Names are drawn for {group}! Open your page to see who you're buying for: {link}", { group: g.ev, link: invite }) },
   { id: "date", label: "Reminder: exchange date", show: g => !!g.date, text: g => t("Reminder: the {group} gift exchange is on {date}.", { group: g.ev, date: fmtDate(g.date) }) + (g.budget ? " " + t("Spending limit: {amount}.", { amount: g.budget }) : "") },
@@ -411,7 +409,7 @@ function renderTexts(){
   if (key !== sel.dataset.key) {
     sel.dataset.key = key; sel.textContent = "";
     avail.forEach(x => sel.append(new Option(t(x.label), x.id)));
-    sel.value = avail.some(x => x.id === cur) ? cur : (g.drawn ? (avail.find(x => x.id === "drawn") ? "drawn" : avail[0].id) : "invite");
+    sel.value = avail.some(x => x.id === cur) ? cur : (g.drawn && avail.some(x => x.id === "drawn") ? "drawn" : avail[0].id);
   }
   const tpl = TEMPLATES.find(x => x.id === sel.value) || avail[0];
   const tplKey = sel.value + "|" + g.ev + "|" + g.date + "|" + g.budget + "|" + g.drawn;

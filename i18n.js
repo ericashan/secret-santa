@@ -5,7 +5,7 @@
 // page draws itself (including text added later, like messages and buttons).
 // Sentences that include names or numbers use t("Hi {name}!", { name }).
 // The Korean dictionary is only downloaded for people who chose Korean.
-const KO_URL = "./i18n-ko.js?v=202610041127";
+const KO_URL = "./i18n-ko.js?v=202610041137";
 
 export const LANGS = [["en", "English"], ["ko", "한국어"]];
 const DICTS = { en: null, ko: null };

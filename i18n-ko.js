@@ -402,5 +402,6 @@ export default {
   "Add {n} ideas to help your Secret Santa.": "시크릿 산타를 위해 아이디어를 {n}개 적어 주세요.",
   "Nice! 1 more idea would help.": "좋아요! 하나만 더 적어 주면 큰 도움이 돼요.",
   "Nice! {n} more ideas would help.": "좋아요! {n}개 더 적어 주면 큰 도움이 돼요.",
-  "More prompts…": "더 보기…"
+  "More prompts…": "더 보기…",
+  "Currency": "통화"
 };

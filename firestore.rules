@@ -8,7 +8,7 @@ service cloud.firestore {
     function isOwner(gid) { return signedIn() && groupDoc(gid).ownerUid == request.auth.uid; }
     function notDrawn(gid) { return groupDoc(gid).drawn != true; }
     function shortText(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
-    function groupFields() { return ['ownerUid', 'ev', 'budget', 'kidBudget', 'date', 'drawn', 'drawnAt', 'createdAt', 'virtual', 'format', 'kind', 'kids']; }
+    function groupFields() { return ['ownerUid', 'ev', 'budget', 'kidBudget', 'date', 'drawn', 'drawnAt', 'createdAt', 'virtual', 'format', 'kind', 'kids', 'currency']; }
 
     // Each signed-in person's own list of groups. Only they can see it.
     match /users/{uid} {

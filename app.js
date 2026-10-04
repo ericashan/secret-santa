@@ -1,8 +1,8 @@
 // Shared setup for every page: Firebase, small helpers, and "my groups".
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { t, locale } from "./i18n.js?v=202610041127";
-import { firebaseConfig } from "./firebase-config.js?v=202610041127";
+import { t, locale } from "./i18n.js?v=202610041137";
+import { firebaseConfig } from "./firebase-config.js?v=202610041137";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -182,3 +182,29 @@ export const formatOf = g => (g && g.format) || (g && g.virtual ? "virtual" : "i
 export const kindOf = g => (g && g.kind) || "family";
 // Kids (receive but don't give) are on by default only for family groups.
 export const kidsOn = g => (g && typeof g.kids === "boolean") ? g.kids : kindOf(g) === "family";
+
+// ---------- Money ----------
+// Budgets are stored as plain numbers ("30") with the group's currency code (default USD).
+// Older groups that typed "$30" still work.
+export const CURRENCIES = ["USD","CAD","MXN","EUR","GBP","KRW","JPY","CNY","HKD","TWD","SGD","PHP","VND","THB","INR","AUD","NZD","CHF","SEK","NOK","DKK","PLN","BRL","ZAR","AED","ILS","TRY"];
+export const currencyOf = g => (g && g.currency) || "USD";
+export function parseAmount(v){
+  const n = parseFloat(String(v == null ? "" : v).replace(/[^\d.,-]/g, "").replace(/,(?=\d{3}\b)/g, "").replace(",", "."));
+  return isFinite(n) && n >= 0 ? n : null;
+}
+export function formatMoney(v, currency = "USD"){
+  const n = parseAmount(v);
+  if (n === null) return String(v || "");
+  try { return new Intl.NumberFormat(locale, { style: "currency", currency, maximumFractionDigits: Number.isInteger(n) ? 0 : 2 }).format(n); }
+  catch (e) { return currency + " " + n; }
+}
+export function currencySymbol(currency = "USD"){
+  try { return new Intl.NumberFormat(locale, { style: "currency", currency }).formatToParts(0).find(p => p.type === "currency").value; }
+  catch (e) { return currency; }
+}
+export function currencyName(code){
+  for (const loc of [locale, undefined, "en"]) {
+    try { return new Intl.DisplayNames(loc ? [loc] : undefined, { type: "currency" }).of(code); } catch (e) {}
+  }
+  return code;
+}

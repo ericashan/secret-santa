@@ -11,16 +11,16 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js">
-<link rel="modulepreload" href="./app.js?v=202610041127">
-<link rel="modulepreload" href="./i18n.js?v=202610041127">
-<link rel="modulepreload" href="./santa-loader.js?v=202610041127">
-<link rel="modulepreload" href="./nav.js?v=202610041127">
-<link rel="modulepreload" href="./calendar.js?v=202610041127">
-<link rel="modulepreload" href="./firebase-config.js?v=202610041127">
+<link rel="modulepreload" href="./app.js?v=202610041137">
+<link rel="modulepreload" href="./i18n.js?v=202610041137">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041137">
+<link rel="modulepreload" href="./nav.js?v=202610041137">
+<link rel="modulepreload" href="./calendar.js?v=202610041137">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041137">
 <!-- Fonts load without holding up the page -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=202610041127">
+<link rel="stylesheet" href="style.css?v=202610041137">
 </head>
 <body>
 <div class="wrap">
@@ -91,15 +91,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 <script type="module">
 import { configured, db, auth, loadAuth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
          authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
-         copyText, canShare, shareInvite } from "./app.js?v=202610041127";
+         copyText, canShare, shareInvite, formatMoney, currencyOf } from "./app.js?v=202610041137";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041127";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041137";
 window.__ssReady = true;
 const { onAuthStateChanged } = (await loadAuth()) || {};
-import { calendarIcon } from "./calendar.js?v=202610041127";
-import { t, startTranslating } from "./i18n.js?v=202610041127";
+import { calendarIcon } from "./calendar.js?v=202610041137";
+import { t, startTranslating } from "./i18n.js?v=202610041137";
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041127";
+import { mountNav } from "./nav.js?v=202610041137";
 mountNav();
 
 if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up yet. Add the Firebase settings to firebase-config.js."; f.hidden = false; throw new Error("not configured"); }
@@ -149,7 +149,7 @@ function render(){
     } else {
       const facts = el("div", "facts");
       const fact = (k, v, raw) => { const s = el("span", "fact"); s.append(k + " "); const b = el("b", null, v); if (raw) b.setAttribute("translate", "no"); s.append(b); facts.append(s); return s; };
-      if (g && g.budget) fact("Limit", g.budget);
+      if (g && g.budget) fact("Limit", formatMoney(g.budget, currencyOf(g)));
       const dateChip = g && g.date ? fact("Exchange", fmtDate(g.date)) : null;
       if (dateChip) dateChip.append(calendarIcon(g, groupLink(gid), gid));
       if (m.organizer) fact("You", "organize");
@@ -221,6 +221,8 @@ $("cancelCreate").onclick = () => { $("createSec").hidden = true; if (location.h
 // "Start a group" from the menu on any page lands here with #start.
 const openStartFromHash = () => { if (location.hash === "#start") $("startBtn").click(); };
 window.addEventListener("hashchange", openStartFromHash); openStartFromHash();
+// New groups start in US dollars, or Korean won for people using the site in Korean.
+const guessCurrency = () => (document.documentElement.lang === "ko" ? "KRW" : "USD");
 // The example name follows the group type.
 document.querySelectorAll('input[name="kind"]').forEach(r => r.addEventListener("change", () => {
   $("groupName").placeholder = t({ family: "Group name, like Family Christmas 2026", friends: "Group name, like Friendsmas 2026", coworkers: "Group name, like Office Gift Swap 2026", other: "Group name, like Holiday Gift Swap 2026" }[r.value]);
@@ -242,7 +244,7 @@ $("createForm").addEventListener("submit", async e => {
   try {
     const kind = (document.querySelector('input[name="kind"]:checked') || {}).value || "family";
     await setDoc(doc(db, "groups", gid), { ownerUid: user.uid, ev: name, budget: "", kidBudget: "", date: "", drawn: false, drawnAt: null, createdAt: new Date().toISOString(),
-      kind, kids: kind === "family", format: "inperson", virtual: false });
+      kind, kids: kind === "family", format: "inperson", virtual: false, currency: guessCurrency() });
     await rememberGroup(gid, { groupName: name, organizer: true });
     location.href = organizeLink(gid);
   } catch (err) { msg("createMsg", "err", "Couldn't create the group. Check your connection and try again."); hideLoading(); }

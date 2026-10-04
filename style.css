@@ -231,3 +231,10 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 .meter{margin:0;font-size:.875rem;font-weight:600;color:var(--gold)}
 .meter.done{color:var(--ok)}
 .promptchip.more{background:transparent;border:1px solid var(--line);color:var(--muted)}
+
+/* Money inputs with the currency symbol inside */
+.money{display:flex;align-items:center;background:var(--bg);border:1px solid var(--line);border-radius:10px;overflow:hidden}
+.money:focus-within{outline:3px solid var(--gold);outline-offset:2px}
+.moneysym{padding:0 4px 0 12px;font-weight:700;color:var(--muted);white-space:nowrap}
+.money input{border:none;background:transparent;padding-left:4px;outline:none}
+.money input:focus-visible{outline:none}

@@ -11,17 +11,17 @@
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
 <link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js">
-<link rel="modulepreload" href="./app.js?v=202610041127">
-<link rel="modulepreload" href="./i18n.js?v=202610041127">
-<link rel="modulepreload" href="./santa-loader.js?v=202610041127">
-<link rel="modulepreload" href="./nav.js?v=202610041127">
-<link rel="modulepreload" href="./draw.js?v=202610041127">
-<link rel="modulepreload" href="./icons.js?v=202610041127">
-<link rel="modulepreload" href="./firebase-config.js?v=202610041127">
+<link rel="modulepreload" href="./app.js?v=202610041137">
+<link rel="modulepreload" href="./i18n.js?v=202610041137">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041137">
+<link rel="modulepreload" href="./nav.js?v=202610041137">
+<link rel="modulepreload" href="./draw.js?v=202610041137">
+<link rel="modulepreload" href="./icons.js?v=202610041137">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041137">
 <!-- Fonts load without holding up the page -->
 <link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
 <noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
-<link rel="stylesheet" href="style.css?v=202610041127">
+<link rel="stylesheet" href="style.css?v=202610041137">
 </head>
 <body>
 <div class="wrap">
@@ -71,8 +71,11 @@
         <div class="grid2">
           <div class="field"><label class="label" for="evName">Group name</label><input id="evName" placeholder="Family Christmas 2026" maxlength="60"></div>
           <div class="field"><label class="label" for="evDate">Exchange date</label><input id="evDate" type="date"></div>
-          <div class="field"><label class="label" for="evBudget">Spending limit</label><input id="evBudget" placeholder="$30" maxlength="20"></div>
-          <div class="field"><label class="label" for="evKidBudget">Limit for kid gifts</label><input id="evKidBudget" placeholder="$15" maxlength="20"></div>
+          <div class="field"><label class="label" for="evCurrency">Currency</label><select id="evCurrency"></select></div>
+          <div class="field"><label class="label" for="evBudget">Spending limit</label>
+            <div class="money"><span class="moneysym" aria-hidden="true">$</span><input id="evBudget" inputmode="decimal" placeholder="30" maxlength="12"></div></div>
+          <div class="field" id="kidBudgetField"><label class="label" for="evKidBudget">Limit for kid gifts</label>
+            <div class="money"><span class="moneysym" aria-hidden="true">$</span><input id="evKidBudget" inputmode="decimal" placeholder="15" maxlength="12"></div></div>
         </div>
         <div class="grid2">
           <div class="field"><label class="label" for="evKind">Who's it for?</label>
@@ -169,18 +172,18 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, auth, loadAuth, $, el, msg, formatOf, kindOf, kidsOn, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
+import { configured, db, auth, loadAuth, $, el, msg, formatOf, kindOf, kidsOn, CURRENCIES, currencyOf, currencyName, currencySymbol, formatMoney, parseAmount, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
          canShare, shareInvite, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041127";
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041137";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041127";
-import { drawAll } from "./draw.js?v=202610041127";
-import { babyIcon } from "./icons.js?v=202610041127";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041137";
+import { drawAll } from "./draw.js?v=202610041137";
+import { babyIcon } from "./icons.js?v=202610041137";
 window.__ssReady = true;
 const { onAuthStateChanged } = (await loadAuth()) || {};
-import { t, startTranslating, locale } from "./i18n.js?v=202610041127";
+import { t, startTranslating, locale } from "./i18n.js?v=202610041137";
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041127";
+import { mountNav } from "./nav.js?v=202610041137";
 mountNav();
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -284,7 +287,12 @@ function render(){
     : fmt === "mixed" ? t("Each person chooses in person or virtually. Gifts are mailed whenever the giver or the receiver is virtual, and those people are asked for an address.")
     : t("Gifts are exchanged in person. Choose a mixed option if some people can't make it.");
   $("inviteTitle").textContent = t({ family: "Invite your family", friends: "Invite your friends", coworkers: "Invite your coworkers", other: "Invite people" }[kind]);
-  setVal("evName", g.ev); setVal("evBudget", g.budget); setVal("evKidBudget", g.kidBudget); setVal("evDate", g.date);
+  const cur = currencyOf(g);
+  if (document.activeElement !== $("evCurrency")) $("evCurrency").value = cur;
+  document.querySelectorAll(".moneysym").forEach(s => s.textContent = currencySymbol(cur));
+  const num = v => { const n = parseAmount(v); return n === null ? "" : String(n); };
+  setVal("evName", g.ev); setVal("evBudget", num(g.budget)); setVal("evKidBudget", num(g.kidBudget)); setVal("evDate", g.date);
+  $("kidBudgetField").hidden = !kidsOn(g);
 
   const list = $("people"); list.textContent = "";
   ids.forEach(id => {
@@ -349,13 +357,17 @@ async function saveSetting(data, okText){
   try { await setDoc(doc(db, "groups", GID), data, { merge: true }); $("saveStatus").textContent = okText || t("Saved."); }
   catch (e) { $("saveStatus").textContent = t("Couldn't save. Check your connection and try again."); render(); }
 }
+// Currency list, named in the reader's language: "USD · US Dollar ($)".
+CURRENCIES.forEach(c => { const o = new Option(c + " · " + currencyName(c) + " (" + currencySymbol(c) + ")", c); o.setAttribute("translate", "no"); $("evCurrency").append(o); });
+const amountText = v => { const n = parseAmount(v); return n === null ? "" : String(n); };
+$("evCurrency").addEventListener("change", () => { const c = $("evCurrency").value; document.querySelectorAll(".moneysym").forEach(s => s.textContent = currencySymbol(c)); saveSetting({ currency: c }); });
 $("evFormat").addEventListener("change", () => { const f = $("evFormat").value; saveSetting({ format: f, virtual: f === "virtual" }); });
 $("evKind").addEventListener("change", () => { const k = $("evKind").value; const data = { kind: k }; if (typeof S.game.kids !== "boolean") data.kids = k === "family"; saveSetting(data); });
 $("evKids").addEventListener("change", () => saveSetting({ kids: $("evKids").checked }));
 ["evName", "evBudget", "evKidBudget", "evDate"].forEach(id => $(id).addEventListener("input", () => {
   $("saveStatus").textContent = "Saving…"; clearTimeout(sTimer);
   sTimer = setTimeout(async () => {
-    try { await setDoc(doc(db, "groups", GID), { ev: $("evName").value.trim(), budget: $("evBudget").value.trim(), kidBudget: $("evKidBudget").value.trim(), date: $("evDate").value }, { merge: true }); $("saveStatus").textContent = "Saved."; }
+    try { await setDoc(doc(db, "groups", GID), { ev: $("evName").value.trim(), budget: amountText($("evBudget").value), kidBudget: amountText($("evKidBudget").value), date: $("evDate").value }, { merge: true }); $("saveStatus").textContent = "Saved."; }
     catch (e) { $("saveStatus").textContent = "Couldn't save. Check your connection and try again."; }
   }, 700);
 }));
@@ -441,7 +453,7 @@ const BATCH = 20;   // many phones cap group texts around 20 people
 const TEMPLATES = [
   { id: "wishlist", label: "Reminder: add your wishlist", show: () => true, text: g => t("Reminder for {group}: add your wishlist so your Secret Santa knows what to get you. {link}", { group: g.ev, link: invite }) },
   { id: "drawn", label: "Names are drawn", show: g => !!g.drawn, text: g => t("Names are drawn for {group}! Open your page to see who you're buying for: {link}", { group: g.ev, link: invite }) },
-  { id: "date", label: "Reminder: exchange date", show: g => !!g.date, text: g => t("Reminder: the {group} gift exchange is on {date}.", { group: g.ev, date: fmtDate(g.date) }) + (g.budget ? " " + t("Spending limit: {amount}.", { amount: g.budget }) : "") },
+  { id: "date", label: "Reminder: exchange date", show: g => !!g.date, text: g => t("Reminder: the {group} gift exchange is on {date}.", { group: g.ev, date: fmtDate(g.date) }) + (g.budget ? " " + t("Spending limit: {amount}.", { amount: formatMoney(g.budget, currencyOf(g)) }) : "") },
   { id: "mail", label: "Reminder: mail your gift", show: g => !!(formatOf(g) !== "inperson" && g.drawn), text: g => g.date ? t("Reminder: mail your {group} gift so it arrives by {date}. The address is on your match page: {link}", { group: g.ev, date: fmtDate(g.date), link: invite }) : t("Reminder: mail your {group} gift soon. The address is on your match page: {link}", { group: g.ev, link: invite }) },
   { id: "custom", label: "Write my own", show: () => true, text: () => "" }
 ];
@@ -458,7 +470,7 @@ function renderTexts(){
     sel.value = avail.some(x => x.id === cur) ? cur : (g.drawn && avail.some(x => x.id === "drawn") ? "drawn" : avail[0].id);
   }
   const tpl = TEMPLATES.find(x => x.id === sel.value) || avail[0];
-  const tplKey = sel.value + "|" + g.ev + "|" + g.date + "|" + g.budget + "|" + g.drawn;
+  const tplKey = sel.value + "|" + g.ev + "|" + g.date + "|" + g.budget + "|" + g.currency + "|" + g.drawn;
   if (!textEdited && tplKey !== lastTemplateKey) { lastTemplateKey = tplKey; $("textBody").value = tpl.text(g); }
 
   const ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));

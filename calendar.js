@@ -1,6 +1,7 @@
 // "Add to calendar" for the exchange date: Google Calendar, or a calendar file
 // that Apple Calendar, Outlook and most other calendar apps can open.
-import { t } from "./i18n.js?v=202610041127";
+import { formatMoney, currencyOf } from "./app.js?v=202610041137";
+import { t } from "./i18n.js?v=202610041137";
 
 const ymd = d => d.replace(/-/g, "");
 function nextDay(d){ const x = new Date(d + "T12:00:00Z"); x.setUTCDate(x.getUTCDate() + 1); return x.toISOString().slice(0, 10); }
@@ -9,7 +10,7 @@ export function eventFor(group, link){
   const title = t("Secret Santa gift exchange: {name}", { name: group.ev || t("Secret Santa") });
   const lines = [];
   if (group.virtual) lines.push(t("Virtual exchange: gifts should arrive by this date, so mail yours early."));
-  if (group.budget) lines.push(t("Spending limit {amount}", { amount: group.budget }));
+  if (group.budget) lines.push(t("Spending limit {amount}", { amount: formatMoney(group.budget, currencyOf(group)) }));
   lines.push(t("Group page: {link}", { link }));
   return { title, date: group.date, details: lines.join("\n"), link };
 }

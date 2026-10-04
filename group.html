@@ -6,7 +6,7 @@
 <title>Secret Santa</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041044">
+<link rel="stylesheet" href="style.css?v=202610041048">
 </head>
 <body>
 <div class="wrap">
@@ -39,9 +39,13 @@
   <section id="joinSec" hidden>
     <h2>Join the group</h2>
     <div class="panel">
-      <form id="joinForm" class="row" autocomplete="off">
+      <form id="joinForm" class="joinform" autocomplete="off">
         <input id="joinName" placeholder="Your name, as your family knows you" aria-label="Your name" maxlength="40">
-        <button class="primary" type="submit" id="joinBtn">Join</button>
+        <div class="field">
+          <input id="joinPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Mobile number (optional)" aria-label="Mobile number (optional)" maxlength="20">
+          <p class="hint">For group texts from the organizer, like reminders. Only the organizer sees it.</p>
+        </div>
+        <div><button class="primary" type="submit" id="joinBtn">Join</button></div>
       </form>
       <p id="joinMsg" class="msg err" hidden></p>
       <p class="hint">No account needed. You'll get a personal link to come back to. Adding a baby or child? Join yourself first, then add them.</p>
@@ -119,6 +123,20 @@
     </div>
   </section>
 
+  <!-- Phone for group texts -->
+  <section id="phoneSec" hidden>
+    <div class="panel">
+      <span class="label">Group texts</span>
+      <p class="hint">Add your mobile number to get reminders from the organizer by text. Only the organizer sees it.</p>
+      <form id="phoneForm" class="row" autocomplete="on">
+        <input id="myPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Mobile number" aria-label="Mobile number" maxlength="20">
+        <button type="submit" class="small" id="phoneSave">Save</button>
+        <button type="button" class="small ghost" id="phoneRemove" hidden>Remove</button>
+      </form>
+      <p id="phoneMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
   <!-- Personal link -->
   <section id="linkSec" hidden>
     <div class="panel">
@@ -148,15 +166,15 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041044";
-import { doc, getDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041044";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041044";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041044";
+import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, normalizePhone, formatPhone, homeLink, organizeLink, groupIdFromUrl,
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041048";
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041048";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041048";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041048";
 window.__ssReady = true;
-import { calendarButton } from "./calendar.js?v=202610041044";
-import { t, startTranslating } from "./i18n.js?v=202610041044";
+import { calendarButton } from "./calendar.js?v=202610041048";
+import { t, startTranslating } from "./i18n.js?v=202610041048";
 const tr = t;
 startTranslating();
 
@@ -220,6 +238,7 @@ function render(){
   $("joinSec").hidden = !!me || !!g.drawn;
   $("lateMsg").hidden = !(g.drawn && !me);
   $("wishSec").hidden = $("linkSec").hidden = $("kidsSec").hidden = !me;
+  if (!me) $("phoneSec").hidden = true;
   $("matchSec").hidden = !(g.drawn && me);
   if (me) {
     $("hello").textContent = t("Hi {name}! Your wishlist", { name: me.name });
@@ -230,6 +249,7 @@ function render(){
     $("kidForm").hidden = !!g.drawn;
     renderKids();
     $("addrSec").hidden = !g.virtual;
+    $("phoneSec").hidden = false;
     $("kidMailHint").hidden = !(g.virtual && S.kids.length);
     if (g.virtual) { watchAddr(me.wishId); renderAddr(); }
   }
@@ -322,6 +342,7 @@ function watchMe(secret){
     gotMe = true;
     rememberGroup(GID, { secret, myName: s.data().name, groupName: S.game.ev || undefined });
     if (location.hash.slice(1) !== secret) history.replaceState(null, "", cleanUrl() + "#" + secret);
+    unsubs.push(onSnapshot(doc(db, "groups", GID, "phones", secret), ph => { S.phone = ph.exists() ? ph.data().phone : ""; renderPhone(); }, () => {}));
     unsubs.push(onSnapshot(doc(db, "groups", GID, "people", secret), p => { S.me = p.exists() ? p.data() : null; if (S.me) watchWish(S.me.wishId); render(); }));
     unsubs.push(onSnapshot(collection(db, "groups", GID, "people", secret, "kids"), ks => {
       S.kids = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
@@ -348,11 +369,14 @@ $("joinForm").addEventListener("submit", async e => {
   if (!name) { msg("joinMsg", "err", "Type your name first."); return; }
   if (nameTaken(name)) { msg("joinMsg", "err", t("{name} is already on the list. Add a last initial, or open your personal link if that's you.", { name })); return; }
   $("joinBtn").disabled = true; msg("joinMsg", "", "");
+  const phone = normalizePhone($("joinPhone").value);
+  if (phone === null) { msg("joinMsg", "err", t("That phone number doesn't look right. Use a 10-digit US number, or start with + and the country code.")); return; }
   const secret = randomId(), wishId = randomId(), rosterId = randomId(16), joinedAt = new Date().toISOString();
   const b = writeBatch(db);
   b.set(doc(db, "groups", GID, "people", secret), { name, wishId, rosterId, joinedAt });
   b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "" });
   b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt });
+  if (phone) b.set(doc(db, "groups", GID, "phones", secret), { phone, updatedAt: joinedAt });
   showLoading("Adding you to Santa's list…");
   try { await b.commit(); gotMe = false; watchMe(secret); }
   catch (err) { msg("joinMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't join now." : "Couldn't join just now. Check your connection and try again."); }
@@ -507,6 +531,24 @@ $("addrForm").addEventListener("submit", async e => {
     offer("We couldn't check the address right now. You can save it as typed and check again later.",
       [{ title: t("Save as typed: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, false) }]);
   }
+});
+
+// ---------- Phone for group texts ----------
+function renderPhone(){
+  const input = $("myPhone");
+  if (document.activeElement !== input) input.value = S.phone ? formatPhone(S.phone) : "";
+  $("phoneRemove").hidden = !S.phone;
+}
+$("phoneForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const phone = normalizePhone($("myPhone").value);
+  if (!phone) { msg("phoneMsg", "err", phone === "" ? t("Type your mobile number first.") : t("That phone number doesn't look right. Use a 10-digit US number, or start with + and the country code.")); return; }
+  try { await setDoc(doc(db, "groups", GID, "phones", S.secret), { phone, updatedAt: new Date().toISOString() }); msg("phoneMsg", "ok", t("Saved. The organizer can include you in group texts.")); }
+  catch (err) { msg("phoneMsg", "err", t("Couldn't save. Check your connection and try again.")); }
+});
+$("phoneRemove").addEventListener("click", async () => {
+  try { await deleteDoc(doc(db, "groups", GID, "phones", S.secret)); msg("phoneMsg", "ok", t("Removed. You won't be included in group texts.")); }
+  catch (err) { msg("phoneMsg", "err", t("Couldn't remove it. Try again.")); }
 });
 </script>
 </body>

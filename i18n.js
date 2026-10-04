@@ -4,7 +4,7 @@
 // language is chosen, any text on the page that has a translation is swapped as the
 // page draws itself (including text added later, like messages and buttons).
 // Sentences that include names or numbers use t("Hi {name}!", { name }).
-import KO from "./i18n-ko.js?v=202610041044";
+import KO from "./i18n-ko.js?v=202610041048";
 
 export const LANGS = [["en", "English"], ["ko", "한국어"]];
 const DICTS = { en: null, ko: KO };

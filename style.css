@@ -167,3 +167,7 @@ a.button.small{padding:6px 12px;font-size:.875rem}
 /* Add to calendar */
 .calwrap{display:flex;flex-direction:column;align-items:flex-start;gap:8px}
 .calmenu{display:flex;flex-wrap:wrap;gap:8px}
+
+/* Join form & group texts */
+.joinform{display:flex;flex-direction:column;gap:10px}
+#textBody{min-height:110px}

@@ -106,6 +106,18 @@ service cloud.firestore {
           && request.resource.data.verified is bool;
       }
 
+      // Optional phone numbers for the organizer's group texts. Keyed by the person's
+      // secret link, so only they (and the organizer) can reach theirs.
+      match /phones/{secret} {
+        allow get: if true;
+        allow list: if isOwner(gid);
+        allow delete: if isOwner(gid) || exists(/databases/$(database)/documents/groups/$(gid)/people/$(secret));
+        allow create, update: if existsAfter(/databases/$(database)/documents/groups/$(gid)/people/$(secret))
+          && request.resource.data.keys().hasOnly(['phone', 'updatedAt'])
+          && request.resource.data.phone is string
+          && request.resource.data.phone.matches('[+][0-9]{7,15}');
+      }
+
       // Public list of names in the group. A child's entry is keyed by their name,
       // so the same child can't be added twice.
       match /roster/{rosterId} {

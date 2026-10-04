@@ -2,8 +2,8 @@
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
 import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { t, locale } from "./i18n.js?v=202610041044";
-import { firebaseConfig } from "./firebase-config.js?v=202610041044";
+import { t, locale } from "./i18n.js?v=202610041048";
+import { firebaseConfig } from "./firebase-config.js?v=202610041048";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
@@ -132,4 +132,28 @@ export function photoError(e){
   if (e && e.message === "unreadable") return t("This browser can't read that photo format. Try a JPG or PNG, or a screenshot of it.");
   if (e && e.message === "too-big") return t("That photo is too detailed to save. Try a different one.");
   return t("Couldn't save the photo. Check your connection and try again.");
+}
+
+// ---------- Phone numbers (for organizer group texts) ----------
+// "(555) 123-4567" -> "+15551234567". Numbers starting with + keep their country code.
+export function normalizePhone(raw){
+  const s = String(raw || "").trim();
+  if (!s) return "";
+  const digits = s.replace(/\D/g, "");
+  if (s.startsWith("+")) return digits.length >= 7 && digits.length <= 15 ? "+" + digits : null;
+  if (digits.length === 10) return "+1" + digits;
+  if (digits.length === 11 && digits[0] === "1") return "+" + digits;
+  return null;
+}
+export function formatPhone(p){
+  const m = /^\+1(\d{3})(\d{3})(\d{4})$/.exec(p || "");
+  return m ? "(" + m[1] + ") " + m[2] + "-" + m[3] : (p || "");
+}
+// Opens Messages with several recipients and the message filled in.
+// iPhones and Android phones use different link formats for group texts.
+export function smsGroupHref(numbers, body){
+  const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const b = encodeURIComponent(body || "");
+  if (ios) return "sms://open?addresses=" + numbers.join(",") + "&body=" + b;
+  return "sms:" + numbers.join(",") + "?body=" + b;
 }

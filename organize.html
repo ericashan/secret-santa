@@ -6,7 +6,7 @@
 <title>Secret Santa Organizer</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041044">
+<link rel="stylesheet" href="style.css?v=202610041048">
 </head>
 <body>
 <div class="wrap">
@@ -107,6 +107,24 @@
     </section>
 
     <section>
+      <h2>Text everyone</h2>
+      <div class="panel">
+        <p class="hint" id="textCount"></p>
+        <div class="chips" id="textPeople"></div>
+        <p class="hint" id="textMissing" hidden></p>
+        <div class="field"><label class="label" for="textTemplate">Message</label><select id="textTemplate"></select></div>
+        <textarea id="textBody" maxlength="600" aria-label="Message text"></textarea>
+        <div class="row" id="textBatches"></div>
+        <div class="row">
+          <button type="button" class="small" id="copyNumbers">Copy all numbers</button>
+          <button type="button" class="small" id="copyMessage">Copy message</button>
+          <button type="button" class="small" id="shareMessage" hidden>Share to a group chat…</button>
+        </div>
+        <p class="hint" data-i18n-html>Texts go out from your phone as a group message, so replies go to everyone in it. If only one number shows up in Messages, tap <b>Copy all numbers</b> and paste them into a new message.</p>
+      </div>
+    </section>
+
+    <section>
       <h2>Delete this group</h2>
       <div class="panel">
         <p class="hint">Removes the group for everyone. Their links stop working. This can't be undone.</p>
@@ -131,16 +149,16 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
   d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
 </script>
 <script type="module">
-import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText,
+import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText, fmtDate, formatPhone, smsGroupHref,
          canShare, shareInvite, smsHref, photoToDataUrl, photoError,
-         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041044";
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js?v=202610041048";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041044";
-import { drawAll } from "./draw.js?v=202610041044";
-import { babyIcon } from "./icons.js?v=202610041044";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041048";
+import { drawAll } from "./draw.js?v=202610041048";
+import { babyIcon } from "./icons.js?v=202610041048";
 window.__ssReady = true;
-import { t, startTranslating, locale } from "./i18n.js?v=202610041044";
+import { t, startTranslating, locale } from "./i18n.js?v=202610041048";
 startTranslating();
 
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
@@ -151,7 +169,7 @@ const G = (...path) => doc(db, "groups", GID, ...path);
 const GC = (...path) => collection(db, "groups", GID, ...path);
 const invite = groupLink(GID);
 $("groupPageLink").href = invite;
-const S = { game: {}, people: {}, kids: {}, excl: [], addr: {} };   // kids: { parentSecret: [kid, ...] }
+const S = { game: {}, people: {}, kids: {}, excl: [], addr: {}, phones: {} };   // kids: { parentSecret: [kid, ...] }
 let unsubs = [], kidSubs = {}, addrSubs = {};
 
 const nameOf = s => (S.people[s] && S.people[s].name) || "Someone";
@@ -211,6 +229,7 @@ async function openOrganizer(user){
   $("who").textContent = t("Signed in as {who}", { who: user.email });
   $("app").hidden = false;
   unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); updateTextLink(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(GC("phones"), s => { const ph = {}; s.docs.forEach(d => ph[d.id] = d.data().phone); S.phones = ph; renderTexts(); }, () => {}));
   unsubs.push(onSnapshot(G("public", "photo"), s => showPhoto(s.exists() ? s.data().data : null), () => {}));
   unsubs.push(onSnapshot(G("admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
   await new Promise(resolve => {
@@ -230,6 +249,7 @@ async function openOrganizer(user){
 
 function setVal(id, v){ const e = $(id); if (document.activeElement !== e && e.value !== (v || "")) e.value = v || ""; }
 function render(){
+  renderTexts();
   const g = S.game, ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
   const kids = allKids();
   if (document.activeElement !== $("evVirtual")) $("evVirtual").checked = !!g.virtual;
@@ -310,7 +330,7 @@ async function removePerson(id){
     const ks = await getDocs(GC("people", id, "kids"));
     const b = writeBatch(db);
     ks.docs.forEach(d => { const k = d.data(); b.delete(d.ref); b.delete(G("wishes", k.wishId)); b.delete(G("roster", k.rosterId)); });
-    b.delete(G("people", id)); b.delete(G("wishes", p.wishId)); b.delete(G("roster", p.rosterId));
+    b.delete(G("people", id)); b.delete(G("wishes", p.wishId)); b.delete(G("roster", p.rosterId)); b.delete(G("phones", id));
     await b.commit();
     saveExcl(S.excl.filter(q => !q.includes(id)));
   } catch(e){ msg("drawMsg", "err", t("Couldn't remove {name}. Try again.", { name: p.name })); }
@@ -370,6 +390,59 @@ $("deleteYes").onclick = async () => {
   try { stopAll(); await deleteDoc(doc(db, "groups", GID)); await forgetGroup(GID); location.replace(homeLink()); }
   catch (e) { hideLoading(); msg("deleteMsg", "err", "Couldn't delete the group. Check your connection and try again."); }
 };
+
+// ---------- Text everyone ----------
+const BATCH = 20;   // many phones cap group texts around 20 people
+const TEMPLATES = [
+  { id: "invite", label: "Invite people to join", show: g => !g.drawn, text: g => t("Join our Secret Santa: {group}! Add your name here: {link}", { group: g.ev, link: invite }) },
+  { id: "wishlist", label: "Reminder: add your wishlist", show: () => true, text: g => t("Reminder for {group}: add your wishlist so your Secret Santa knows what to get you. {link}", { group: g.ev, link: invite }) },
+  { id: "drawn", label: "Names are drawn", show: g => !!g.drawn, text: g => t("Names are drawn for {group}! Open your page to see who you're buying for: {link}", { group: g.ev, link: invite }) },
+  { id: "date", label: "Reminder: exchange date", show: g => !!g.date, text: g => t("Reminder: the {group} gift exchange is on {date}.", { group: g.ev, date: fmtDate(g.date) }) + (g.budget ? " " + t("Spending limit: {amount}.", { amount: g.budget }) : "") },
+  { id: "mail", label: "Reminder: mail your gift", show: g => !!(g.virtual && g.drawn), text: g => g.date ? t("Reminder: mail your {group} gift so it arrives by {date}. The address is on your match page: {link}", { group: g.ev, date: fmtDate(g.date), link: invite }) : t("Reminder: mail your {group} gift soon. The address is on your match page: {link}", { group: g.ev, link: invite }) },
+  { id: "custom", label: "Write my own", show: () => true, text: () => "" }
+];
+let textEdited = false, lastTemplateKey = "";
+function renderTexts(){
+  const g = S.game || {};
+  // Message choices that fit where the group is (before or after the draw, virtual or not).
+  const sel = $("textTemplate"), cur = sel.value;
+  const avail = TEMPLATES.filter(x => x.show(g));
+  const key = avail.map(x => x.id).join(",");
+  if (key !== sel.dataset.key) {
+    sel.dataset.key = key; sel.textContent = "";
+    avail.forEach(x => sel.append(new Option(t(x.label), x.id)));
+    sel.value = avail.some(x => x.id === cur) ? cur : (g.drawn ? (avail.find(x => x.id === "drawn") ? "drawn" : avail[0].id) : "invite");
+  }
+  const tpl = TEMPLATES.find(x => x.id === sel.value) || avail[0];
+  const tplKey = sel.value + "|" + g.ev + "|" + g.date + "|" + g.budget + "|" + g.drawn;
+  if (!textEdited && tplKey !== lastTemplateKey) { lastTemplateKey = tplKey; $("textBody").value = tpl.text(g); }
+
+  const ids = Object.keys(S.people).sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  const withPhone = ids.filter(id => S.phones[id]), without = ids.filter(id => !S.phones[id]);
+  $("textCount").textContent = ids.length ? t("{n} of {total} people added a mobile number.", { n: withPhone.length, total: ids.length }) : t("Nobody has joined yet.");
+  const chips = $("textPeople"); chips.textContent = "";
+  withPhone.forEach(id => { const c = el("span", "chip", nameOf(id) + " · " + formatPhone(S.phones[id])); c.setAttribute("translate", "no"); chips.append(c); });
+  $("textMissing").hidden = !without.length;
+  $("textMissing").textContent = without.length ? t("No number yet: {names}", { names: without.map(nameOf).join(", ") }) : "";
+
+  const numbers = withPhone.map(id => S.phones[id]);
+  const box = $("textBatches"); box.textContent = "";
+  if (!numbers.length) { box.append(el("span", "hint", t("Once people add their numbers, you can text them all from here."))); }
+  for (let i = 0; i < numbers.length; i += BATCH) {
+    const part = numbers.slice(i, i + BATCH);
+    const a = el("a", "button primary", numbers.length <= BATCH ? t("Text everyone ({n})", { n: numbers.length }) : t("Text people {from}–{to}", { from: i + 1, to: i + part.length }));
+    a.href = smsGroupHref(part, $("textBody").value);
+    a.addEventListener("click", () => { a.href = smsGroupHref(part, $("textBody").value); });
+    box.append(a);
+  }
+  $("copyNumbers").disabled = !numbers.length;
+  $("copyNumbers").onclick = () => copyText(numbers.join(", "), $("copyNumbers"), t("Copy all numbers"));
+}
+$("textTemplate").addEventListener("change", () => { textEdited = false; lastTemplateKey = ""; renderTexts(); });
+$("textBody").addEventListener("input", () => { textEdited = true; });
+$("copyMessage").onclick = () => copyText($("textBody").value, $("copyMessage"), t("Copy message"));
+$("shareMessage").hidden = !navigator.share;
+$("shareMessage").onclick = async () => { try { await navigator.share({ text: $("textBody").value }); } catch (e) {} };
 </script>
 </body>
 </html>

@@ -117,3 +117,13 @@ footer a{color:var(--muted)}
 .baby-icon.big{vertical-align:-.05em;margin-right:.15em}
 .namewithicon{display:inline-flex;align-items:center;gap:2px}
 .label.namewithicon{text-transform:none;letter-spacing:0;font-size:.9rem;color:var(--ink)}
+
+/* Homepage */
+.row.spread{justify-content:space-between}
+.cards{display:flex;flex-direction:column;gap:14px}
+.cards:empty{display:none}
+.groupname{font-family:var(--display);font-weight:400;font-size:1.35rem;line-height:1.15;margin:0;color:var(--accent);overflow-wrap:anywhere;min-width:0}
+a.button{display:inline-flex;align-items:center;justify-content:center;font-weight:600;text-decoration:none;border-radius:10px;padding:10px 16px;border:1px solid var(--line);background:var(--paper);color:var(--ink)}
+a.button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+a.button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+footer.row{gap:18px}

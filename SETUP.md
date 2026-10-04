@@ -1,91 +1,45 @@
 # Secret Santa website: setup guide
 
-This takes about 20–30 minutes. A computer is much easier than a phone for these steps.
-Everything here is free and needs no credit card.
+Your site: **https://ericashan.github.io/secret-santa/**
 
-**What you'll end up with**
-- A group page at `https://YOUR-GITHUB-NAME.github.io/secret-santa/` that family open without an account.
-- An organizer page at `.../secret-santa/organizer.html` that only your Google account can use.
+The website files and your Firebase settings are already in this repository. What's left happens in Firebase and GitHub settings, and works on a phone.
 
-**Files in this folder**
-- `index.html` – the group page (join, wishlist, your match)
-- `organizer.html` – your page (details, people, draw and lock)
-- `style.css` – the look
-- `firebase-config.js` – where your Firebase settings go
-- `firestore.rules` – the security rules (you paste these into Firebase; don't upload this one)
+## 1. Firebase database
+1. Go to https://console.firebase.google.com and open your **secret-santa** project.
+2. **Build → Firestore Database → Create database.** Pick a location near you and choose **production mode**.
 
----
+## 2. Security rules
+These rules make sure only each group's organizer can draw names or change that group.
+1. In your GitHub repository, open `firestore.rules` and copy everything.
+2. In Firebase, open **Firestore Database → Rules**, replace everything with what you copied, and tap **Publish**.
 
-## Part 1: Firebase (the database)
+You don't need to edit anything in the rules. Whenever this file changes, paste it again and publish.
 
-**Step 1. Create a project**
-1. Go to https://console.firebase.google.com and sign in with your Gmail.
-2. Click **Create a project** (or **Add project**). Name it `secret-santa`.
-3. Turn off Google Analytics when asked. Click **Create project**.
+## 3. Google sign-in (for organizers and optional syncing)
+1. **Build → Authentication → Get started.**
+2. **Sign-in method → Google**, switch it on, pick your email as the support email, **Save**.
+3. **Settings → Authorized domains → Add domain**, enter `ericashan.github.io`.
 
-**Step 2. Turn on the database**
-1. In the left menu, open **Build → Firestore Database**.
-2. Click **Create database**.
-3. Pick a location near you (for example `nam5 (United States)`), then choose **Start in production mode**. Click **Create**.
+## 4. Turn on the website
+1. In this repository: **Settings → Pages**.
+2. Source: **Deploy from a branch**, branch **main**, folder **/ (root)**, **Save**.
+3. After a minute or two the site is live at the address above.
 
-**Step 3. Add the security rules**
-These rules are what stop anyone except you from drawing or changing matches.
-1. In Firestore, open the **Rules** tab.
-2. Delete everything there and paste in the whole contents of `firestore.rules`.
-3. Find `YOUR_GMAIL_ADDRESS@gmail.com` and replace it with your own Gmail address.
-4. Click **Publish**.
+## Using it
+- **Start a group:** open the homepage, tap **Start a group**, name it, and sign in with Google. You become that group's organizer.
+- **Invite people:** on the organizer page, copy the invite link and send it out. People join with just their name. Parents add their kids from their own page.
+- **Play in your own group:** open your invite link and join like everyone else.
+- **My groups:** every group you join or organize appears on the homepage on that device. Sign in with Google there to see your groups on every device.
+- **Draw:** when everyone's in, tap **Draw names and lock** on the organizer page. Only you can draw or start over.
+- **Lost a link?** The organizer can copy anyone's personal link from the **People** list.
 
-**Step 4. Get your web settings**
-1. Click the gear icon next to **Project Overview** → **Project settings**.
-2. Under **Your apps**, click the **`</>`** (Web) icon.
-3. Name it `secret-santa`. Leave "Firebase Hosting" unchecked. Click **Register app**.
-4. You'll see a block of code with `const firebaseConfig = { ... }`. Keep this tab open. You'll copy those values in Part 2.
+## What's protected
+- Only a group's organizer can draw, start over, remove people, change details or delete that group.
+- After the draw, nobody can join a group until its organizer starts over.
+- Personal links can't be listed by anyone except that group's organizer.
+- The organizer page never shows who has whom. An organizer could technically find matches in the Firebase console only if they own the Firebase project.
 
-**Step 5. Turn on Google sign-in (for you only)**
-1. In the left menu, open **Build → Authentication** → **Get started**.
-2. Under **Sign-in method**, click **Google**, switch it on, choose your email as the support email, and click **Save**.
-
-## Part 2: GitHub (the website)
-
-**Step 6. Create the repository**
-1. Go to https://github.com and sign up (or sign in). Note your username.
-2. Click **+** (top right) → **New repository**.
-3. Name it `secret-santa`, set it to **Public**, and click **Create repository**.
-4. Click **uploading an existing file**. Drag in `index.html`, `organizer.html`, `style.css` and `firebase-config.js`. Click **Commit changes**.
-
-**Step 7. Add your Firebase settings**
-1. In your repository, click `firebase-config.js`, then the pencil icon to edit.
-2. Replace each `PASTE_...` value with the matching value from Step 4 (apiKey, authDomain, projectId, storageBucket, messagingSenderId, appId). Keep the quote marks.
-3. Click **Commit changes**.
-
-**Step 8. Turn on the website**
-1. In your repository, open **Settings → Pages**.
-2. Under **Build and deployment**, set Source to **Deploy from a branch**, branch **main**, folder **/ (root)**. Click **Save**.
-3. Wait 1–2 minutes and refresh. GitHub shows your site address: `https://YOUR-GITHUB-NAME.github.io/secret-santa/`.
-
-**Step 9. Allow sign-in from your website**
-1. Back in Firebase: **Authentication → Settings → Authorized domains → Add domain**.
-2. Enter `YOUR-GITHUB-NAME.github.io` (no `https://`, no `/secret-santa`). Click **Add**.
-
-## Part 3: Run your Secret Santa
-
-1. Open `https://YOUR-GITHUB-NAME.github.io/secret-santa/organizer.html` and sign in with Google.
-2. Fill in the group name, spending limit and exchange date.
-3. Copy the invite link and send it to everyone. If you're playing, open it yourself and join too.
-4. Each person joins with their name, writes a wishlist, and gets a personal link to come back with. If someone loses theirs, copy it from the **People** list on your organizer page.
-5. Add any "shouldn't draw" rules, then tap **Draw names and lock**.
-6. Everyone opens their personal link to see who they're buying for, along with that person's wishlist.
-
-**What's protected**
-- Only your Google account can draw, start over, remove people or change the group details. The database itself refuses anyone else, even if they tinker with the page.
-- After the draw, nobody can join until you start over.
-- Nobody can see a list of other people's personal links except you.
-- Your organizer page never shows who has whom. Because you own the database, you could dig matches out of the Firebase console if you went looking, so just don't open the `matches` collection there.
-
-**Next year:** open the organizer page, tap **Start over**, remove anyone who isn't playing, and draw again.
-
-**Something not working?**
-- "This page isn't set up yet": `firebase-config.js` still has `PASTE_` values (Step 7).
-- "This website isn't approved for sign-in": redo Step 9.
-- "isn't the organizer": the email in your rules (Step 3) doesn't match the Google account you signed in with.
-- People can't join: make sure you clicked **Publish** in Step 3.
+## Something not working?
+- **"This website isn't approved for Google sign-in"**: redo step 3.3.
+- **Can't create a group, join, or add a child**: paste the latest `firestore.rules` and **Publish** (step 2).
+- **Page not found**: GitHub Pages isn't on yet, or needs another minute (step 4).

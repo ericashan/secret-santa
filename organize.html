@@ -11,8 +11,8 @@
 <body>
 <div class="wrap">
   <header>
-    <h1>Organizer</h1>
-    <p class="hint">Only the organizer's Google account can use this page.</p>
+    <h1 id="title">Organizer</h1>
+    <p class="hint">Only this group's organizer can use this page.</p>
   </header>
 
   <p id="fatal" class="msg err" hidden></p>
@@ -28,7 +28,7 @@
     <section>
       <h2>Invite your family</h2>
       <div class="panel">
-        <p class="hint">Send everyone this link. They join with just their name, and parents add their kids from their own page.</p>
+        <p class="hint">Send everyone this link. They join with just their name, and parents add their kids from their own page. Playing too? Open the link and join like everyone else.</p>
         <div class="linkbox" id="inviteLink"></div>
         <div class="row"><button type="button" class="small" id="copyInvite">Copy invite link</button></div>
       </div>
@@ -86,40 +86,53 @@
         <p class="hint">This page never shows you who has whom.</p>
       </div>
     </section>
+
+    <section>
+      <h2>Delete this group</h2>
+      <div class="panel">
+        <p class="hint">Removes the group for everyone. Their links stop working. This can't be undone.</p>
+        <div><button type="button" id="deleteBtn">Delete group</button></div>
+        <div class="confirm" id="deleteConfirm" hidden>
+          <span>Delete this group for everyone? Type the group name to confirm.</span>
+          <input id="deleteName" aria-label="Group name to confirm" autocomplete="off">
+          <div class="row"><button class="primary" type="button" id="deleteYes">Delete for everyone</button><button type="button" id="deleteNo">Cancel</button></div>
+        </div>
+        <p id="deleteMsg" class="msg err" hidden></p>
+      </div>
+    </section>
   </div>
 
-  <footer><a href="./">Back to the group page</a></footer>
+  <footer class="row"><a href="./">My groups</a><a href="#" id="groupPageLink">Group page</a></footer>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, GoogleAuthProvider, signInWithPopup, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { firebaseConfig } from "./firebase-config.js";
+import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText,
+         authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js";
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { showLoading, hideLoading } from "./santa-loader.js";
 import { drawAll } from "./draw.js";
 import { babyIcon } from "./icons.js";
 
-const $ = id => document.getElementById(id);
 function fatal(t){ const f = $("fatal"); f.textContent = t; f.hidden = false; }
-if (String(firebaseConfig.apiKey).startsWith("PASTE")) { fatal("Add your Firebase settings to firebase-config.js first."); throw new Error("not configured"); }
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app), auth = getAuth(app);
-const base = location.origin + location.pathname.replace(/organizer\.html$/, "");
+if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }
+const GID = groupIdFromUrl();
+if (!GID) { location.replace(homeLink()); throw new Error("no group"); }
+const G = (...path) => doc(db, "groups", GID, ...path);
+const GC = (...path) => collection(db, "groups", GID, ...path);
+const invite = groupLink(GID);
+$("groupPageLink").href = invite;
 const S = { game: {}, people: {}, kids: {}, excl: [] };   // kids: { parentSecret: [kid, ...] }
 let unsubs = [], kidSubs = {};
 
-function msg(id, kind, text){ const m = $(id); m.className = "msg " + kind; m.textContent = text; m.hidden = !text; }
-const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
 const nameOf = s => (S.people[s] && S.people[s].name) || "Someone";
 const allKids = () => Object.entries(S.kids).filter(([p]) => S.people[p]).flatMap(([p, ks]) => ks.map(k => ({ ...k, parent: p })));
-async function copy(text, btn, label){ try { await navigator.clipboard.writeText(text); btn.textContent = "Copied"; } catch(e){ btn.textContent = "Couldn't copy"; } setTimeout(() => btn.textContent = label, 1800); }
+const copy = copyText;
 
-$("inviteLink").textContent = base;
-$("copyInvite").onclick = () => copy(base, $("copyInvite"), "Copy invite link");
-$("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithPopup(auth, new GoogleAuthProvider()); } catch(e){ msg("authMsg", "err", e.code === "auth/unauthorized-domain" ? "This website isn't approved for sign-in yet. In Firebase, add it under Authentication → Settings → Authorized domains." : "Sign-in didn't finish. Try again."); } };
-$("signOut").onclick = () => signOut(auth);
+$("inviteLink").textContent = invite;
+$("copyInvite").onclick = () => copy(invite, $("copyInvite"), "Copy invite link");
+$("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithGoogle(); } catch(e){ msg("authMsg", "err", signInError(e)); } };
+$("signOut").onclick = () => signOutNow();
 
 function stopAll(){ unsubs.forEach(u => u()); unsubs = []; Object.values(kidSubs).forEach(u => u()); kidSubs = {}; S.kids = {}; }
 
@@ -136,19 +149,19 @@ async function openOrganizer(user){
   $("app").hidden = true;
   if (!user) { $("signedOut").hidden = false; return; }
   $("signedOut").hidden = true;
-  try { await getDoc(doc(db, "admin", "settings")); }
-  catch (e) { $("signedOut").hidden = false; msg("authMsg", "err", user.email + " isn't the organizer for this group. Sign out and use the organizer's Google account."); await signOut(auth); return; }
+  const gs = await getDoc(doc(db, "groups", GID));
+  if (!gs.exists()) { fatal("This group doesn't exist. It may have been deleted."); return; }
+  if (gs.data().ownerUid !== user.uid) { $("signedOut").hidden = false; msg("authMsg", "err", (user.email || "This account") + " isn't the organizer of this group. Sign out and use the Google account that created it."); return; }
+  rememberGroup(GID, { organizer: true, groupName: gs.data().ev });
   $("who").textContent = "Signed in as " + user.email;
   $("app").hidden = false;
-  const g = await getDoc(doc(db, "config", "game"));
-  if (!g.exists()) await setDoc(doc(db, "config", "game"), { ev: "", budget: "", kidBudget: "", date: "", drawn: false, drawnAt: null });
-  unsubs.push(onSnapshot(doc(db, "config", "game"), s => { S.game = s.data() || {}; render(); }));
-  unsubs.push(onSnapshot(doc(db, "admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
+  unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(G("admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
   await new Promise(resolve => {
-    unsubs.push(onSnapshot(collection(db, "people"), s => {
+    unsubs.push(onSnapshot(GC("people"), s => {
       const p = {}; s.docs.forEach(d => p[d.id] = d.data()); S.people = p;
       // Follow each person's kids; stop following people who were removed.
-      Object.keys(p).forEach(sec => { if (!kidSubs[sec]) kidSubs[sec] = onSnapshot(collection(db, "people", sec, "kids"), ks => {
+      Object.keys(p).forEach(sec => { if (!kidSubs[sec]) kidSubs[sec] = onSnapshot(GC("people", sec, "kids"), ks => {
         S.kids[sec] = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt)); render(); }); });
       Object.keys(kidSubs).forEach(sec => { if (!p[sec]) { kidSubs[sec](); delete kidSubs[sec]; delete S.kids[sec]; } });
       render(); resolve();
@@ -169,7 +182,7 @@ function render(){
     if (S.people[id].kidVolunteer) { w.append(" "); w.append(el("span", "badge", "will buy for a kid")); }
     const row = el("div", "row");
     const c = el("button", "small", "Copy their link"); c.type = "button";
-    c.onclick = () => copy(base + "#" + id, c, "Copy their link");
+    c.onclick = () => copy(personalLink(GID, id), c, "Copy their link");
     row.append(c);
     if (!g.drawn) { const r = el("button", "small ghost", "Remove"); r.type = "button"; r.onclick = () => removePerson(id); row.append(r); }
     it.append(w, row); list.append(it);
@@ -213,12 +226,12 @@ let sTimer = null;
 ["evName", "evBudget", "evKidBudget", "evDate"].forEach(id => $(id).addEventListener("input", () => {
   $("saveStatus").textContent = "Saving…"; clearTimeout(sTimer);
   sTimer = setTimeout(async () => {
-    try { await setDoc(doc(db, "config", "game"), { ev: $("evName").value.trim(), budget: $("evBudget").value.trim(), kidBudget: $("evKidBudget").value.trim(), date: $("evDate").value }, { merge: true }); $("saveStatus").textContent = "Saved."; }
+    try { await setDoc(doc(db, "groups", GID), { ev: $("evName").value.trim(), budget: $("evBudget").value.trim(), kidBudget: $("evKidBudget").value.trim(), date: $("evDate").value }, { merge: true }); $("saveStatus").textContent = "Saved."; }
     catch (e) { $("saveStatus").textContent = "Couldn't save. Check your connection and try again."; }
   }, 700);
 }));
 
-async function saveExcl(list){ try { await setDoc(doc(db, "admin", "settings"), { excl: list.map(p => p.join("|")) }, { merge: true }); } catch(e){ msg("drawMsg", "err", "Couldn't save that rule. Try again."); } }
+async function saveExcl(list){ try { await setDoc(G("admin", "settings"), { excl: list.map(p => p.join("|")) }, { merge: true }); } catch(e){ msg("drawMsg", "err", "Couldn't save that rule. Try again."); } }
 $("addEx").onclick = () => { const a = $("exA").value, b = $("exB").value; if (!a || !b || a === b) return;
   if (S.excl.some(p => (p[0] === a && p[1] === b) || (p[0] === b && p[1] === a))) return; saveExcl(S.excl.concat([[a, b]])); };
 
@@ -226,10 +239,10 @@ async function removePerson(id){
   const p = S.people[id]; if (!p) return;
   showLoading("Taking " + p.name + " off the list…");
   try {
-    const ks = await getDocs(collection(db, "people", id, "kids"));
+    const ks = await getDocs(GC("people", id, "kids"));
     const b = writeBatch(db);
-    ks.docs.forEach(d => { const k = d.data(); b.delete(d.ref); b.delete(doc(db, "wishes", k.wishId)); b.delete(doc(db, "roster", k.rosterId)); });
-    b.delete(doc(db, "people", id)); b.delete(doc(db, "wishes", p.wishId)); b.delete(doc(db, "roster", p.rosterId));
+    ks.docs.forEach(d => { const k = d.data(); b.delete(d.ref); b.delete(G("wishes", k.wishId)); b.delete(G("roster", k.rosterId)); });
+    b.delete(G("people", id)); b.delete(G("wishes", p.wishId)); b.delete(G("roster", p.rosterId));
     await b.commit();
     saveExcl(S.excl.filter(q => !q.includes(id)));
   } catch(e){ msg("drawMsg", "err", "Couldn't remove " + p.name + ". Try again."); }
@@ -238,7 +251,7 @@ async function removePerson(id){
 async function removeKid(parent, k){
   showLoading("Taking " + k.name + " off the list…");
   const b = writeBatch(db);
-  b.delete(doc(db, "people", parent, "kids", k.id)); b.delete(doc(db, "wishes", k.wishId)); b.delete(doc(db, "roster", k.rosterId));
+  b.delete(G("people", parent, "kids", k.id)); b.delete(G("wishes", k.wishId)); b.delete(G("roster", k.rosterId));
   try { await b.commit(); } catch(e){ msg("drawMsg", "err", "Couldn't remove " + k.name + ". Try again."); }
   finally { hideLoading(); }
 }
@@ -257,9 +270,9 @@ $("drawBtn").onclick = async () => {
     const rec = S.people[result.adultPairs[id]];
     const gifts = [{ name: rec.name, wishId: rec.wishId, kid: false }];
     (result.kidGivers[id] || []).forEach(kidId => { const k = kidById[kidId]; gifts.push({ name: k.name, wishId: k.wishId, kid: true }); });
-    b.set(doc(db, "matches", id), { gifts });
+    b.set(G("matches", id), { gifts });
   });
-  b.set(doc(db, "config", "game"), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
+  b.set(doc(db, "groups", GID), { drawn: true, drawnAt: new Date().toISOString() }, { merge: true });
   try { await b.commit(); msg("drawMsg", "ok", "Names drawn for " + adults.length + " adults" + (kids.length ? " and " + kids.length + (kids.length === 1 ? " kid" : " kids") : "") + ". Everyone can open their personal link to see their match."); }
   catch (e) { msg("drawMsg", "err", "The draw didn't finish. Try again."); }
   finally { hideLoading(); }
@@ -270,15 +283,24 @@ $("resetNo").onclick = () => { $("resetConfirm").hidden = true; $("resetBtn").hi
 $("resetYes").onclick = async () => {
   showLoading("Emptying the sack…");
   try {
-    const m = await getDocs(collection(db, "matches"));
+    const m = await getDocs(GC("matches"));
     const b = writeBatch(db);
     m.docs.forEach(d => b.delete(d.ref));
-    b.set(doc(db, "config", "game"), { drawn: false, drawnAt: null }, { merge: true });
+    b.set(doc(db, "groups", GID), { drawn: false, drawnAt: null }, { merge: true });
     await b.commit();
     msg("drawMsg", "ok", "Matches erased. Joining is open again and you can draw when ready.");
   } catch (e) { msg("drawMsg", "err", "Couldn't erase the matches. Try again."); }
   finally { hideLoading(); }
   $("resetConfirm").hidden = true; $("resetBtn").hidden = false;
+};
+
+$("deleteBtn").onclick = () => { $("deleteConfirm").hidden = false; $("deleteBtn").hidden = true; $("deleteName").value = ""; $("deleteName").focus(); };
+$("deleteNo").onclick = () => { $("deleteConfirm").hidden = true; $("deleteBtn").hidden = false; msg("deleteMsg", "", ""); };
+$("deleteYes").onclick = async () => {
+  if ($("deleteName").value.trim().toLowerCase() !== (S.game.ev || "").trim().toLowerCase()) { msg("deleteMsg", "err", "That doesn't match the group name."); return; }
+  showLoading("Packing up the sleigh…");
+  try { stopAll(); await deleteDoc(doc(db, "groups", GID)); await forgetGroup(GID); location.replace(homeLink()); }
+  catch (e) { hideLoading(); msg("deleteMsg", "err", "Couldn't delete the group. Check your connection and try again."); }
 };
 </script>
 </body>

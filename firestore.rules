@@ -2,86 +2,95 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // Replace with the Gmail address you'll use to organize.
-    function isOrganizer() {
-      return request.auth != null
-        && request.auth.token.email == "YOUR_GMAIL_ADDRESS@gmail.com"
-        && request.auth.token.email_verified == true;
+    function signedIn() { return request.auth != null; }
+    function groupDoc(gid) { return get(/databases/$(database)/documents/groups/$(gid)).data; }
+    // The group's organizer is whoever created it.
+    function isOwner(gid) { return signedIn() && groupDoc(gid).ownerUid == request.auth.uid; }
+    function notDrawn(gid) { return groupDoc(gid).drawn != true; }
+    function shortText(v, max) { return v is string && v.size() > 0 && v.size() <= max; }
+    function groupFields() { return ['ownerUid', 'ev', 'budget', 'kidBudget', 'date', 'drawn', 'drawnAt', 'createdAt']; }
+
+    // Each signed-in person's own list of groups. Only they can see it.
+    match /users/{uid} {
+      allow read, write: if signedIn() && request.auth.uid == uid;
     }
 
-    function notDrawn() {
-      return !exists(/databases/$(database)/documents/config/game)
-        || get(/databases/$(database)/documents/config/game).data.drawn != true;
-    }
-
-    function shortText(v, max) {
-      return v is string && v.size() > 0 && v.size() <= max;
-    }
-
-    // Group name, budget, date and the lock. Everyone reads; only you change it.
-    match /config/{docId} {
-      allow read: if true;
-      allow write: if isOrganizer();
-    }
-
-    // Organizer-only settings ("who shouldn't draw whom").
-    match /admin/{docId} {
-      allow read, write: if isOrganizer();
-    }
-
-    // One document per person, keyed by their secret personal link.
-    // Only someone who knows the link can open it; nobody can list them except you.
-    match /people/{secret} {
+    match /groups/{gid} {
+      // Anyone with the group's link can see its name, budget, date and whether names are drawn.
       allow get: if true;
-      allow list, delete: if isOrganizer();
-      allow create: if notDrawn()
-        && secret.size() >= 20
-        && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'joinedAt'])
-        && shortText(request.resource.data.name, 40);
-      // The only thing a person can change later: "happy to buy for a kid too".
-      allow update: if notDrawn()
-        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kidVolunteer'])
-        && request.resource.data.kidVolunteer is bool;
+      allow list: if false;
+      // Anyone signed in with Google can start a group and becomes its organizer.
+      allow create: if signedIn()
+        && gid.size() >= 10
+        && request.resource.data.ownerUid == request.auth.uid
+        && request.resource.data.drawn == false
+        && request.resource.data.keys().hasOnly(groupFields())
+        && shortText(request.resource.data.ev, 60);
+      // Only the organizer can change it, and nobody can change who the organizer is.
+      allow update: if signedIn()
+        && resource.data.ownerUid == request.auth.uid
+        && request.resource.data.ownerUid == resource.data.ownerUid
+        && request.resource.data.keys().hasOnly(groupFields());
+      allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
-      // Kids a parent adds. Reachable only through the parent's secret link.
-      match /kids/{kidId} {
+      // Organizer-only settings ("who shouldn't draw whom").
+      match /admin/{docId} {
+        allow read, write: if isOwner(gid);
+      }
+
+      // One document per person, keyed by their secret personal link.
+      match /people/{secret} {
+        allow get: if true;
+        allow list, delete: if isOwner(gid);
+        allow create: if notDrawn(gid)
+          && secret.size() >= 20
+          && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'joinedAt'])
+          && shortText(request.resource.data.name, 40);
+        allow update: if notDrawn(gid)
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['kidVolunteer'])
+          && request.resource.data.kidVolunteer is bool;
+
+        // Kids a parent adds. Reachable only through the parent's secret link.
+        match /kids/{kidId} {
+          allow read: if true;
+          allow delete: if isOwner(gid);
+          allow create: if notDrawn(gid)
+            && exists(/databases/$(database)/documents/groups/$(gid)/people/$(secret))
+            && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'createdAt'])
+            && shortText(request.resource.data.name, 40);
+        }
+      }
+
+      // Wishlists, keyed by a second secret that only the person and their Secret Santa learn.
+      match /wishes/{wishId} {
+        allow get: if true;
+        allow list, delete: if isOwner(gid);
+        allow create: if notDrawn(gid)
+          && wishId.size() >= 20
+          && request.resource.data.keys().hasOnly(['name', 'wishlist'])
+          && shortText(request.resource.data.name, 40)
+          && request.resource.data.wishlist is string
+          && request.resource.data.wishlist.size() <= 4000;
+        allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist'])
+          && request.resource.data.wishlist is string
+          && request.resource.data.wishlist.size() <= 4000;
+      }
+
+      // Public list of names in the group. A child's entry is keyed by their name,
+      // so the same child can't be added twice.
+      match /roster/{rosterId} {
         allow read: if true;
-        allow delete: if isOrganizer();
-        allow create: if notDrawn()
-          && exists(/databases/$(database)/documents/people/$(secret))
-          && request.resource.data.keys().hasOnly(['name', 'wishId', 'rosterId', 'createdAt'])
+        allow delete: if isOwner(gid);
+        allow create: if notDrawn(gid)
+          && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'kid', 'parentName'])
           && shortText(request.resource.data.name, 40);
       }
-    }
 
-    // Wishlists, keyed by a second secret that only the person and their Secret Santa learn.
-    match /wishes/{wishId} {
-      allow get: if true;
-      allow list, delete: if isOrganizer();
-      allow create: if notDrawn()
-        && wishId.size() >= 20
-        && request.resource.data.keys().hasOnly(['name', 'wishlist'])
-        && shortText(request.resource.data.name, 40)
-        && request.resource.data.wishlist is string
-        && request.resource.data.wishlist.size() <= 4000;
-      allow update: if request.resource.data.diff(resource.data).affectedKeys().hasOnly(['wishlist'])
-        && request.resource.data.wishlist is string
-        && request.resource.data.wishlist.size() <= 4000;
-    }
-
-    // Public list of names so everyone can see who has joined.
-    match /roster/{rosterId} {
-      allow read: if true;
-      allow delete: if isOrganizer();
-      allow create: if notDrawn()
-        && request.resource.data.keys().hasOnly(['name', 'joinedAt', 'kid', 'parentName'])
-        && shortText(request.resource.data.name, 40);
-    }
-
-    // Each person's match, keyed by their secret link. Only you can write these.
-    match /matches/{secret} {
-      allow get: if true;
-      allow list, write: if isOrganizer();
+      // Each person's match, keyed by their secret link. Only the organizer writes these.
+      match /matches/{secret} {
+        allow get: if true;
+        allow list, write: if isOwner(gid);
+      }
     }
   }
 }

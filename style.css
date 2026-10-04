@@ -127,3 +127,18 @@ a.button{display:inline-flex;align-items:center;justify-content:center;font-weig
 a.button.primary{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
 a.button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 footer.row{gap:18px}
+
+/* Group cards: photo, clickable title, invite bar */
+.groupcard{overflow:hidden}
+.groupphoto{display:block;margin:-20px -20px 0;aspect-ratio:16/7;background:var(--soft);overflow:hidden}
+.groupphoto img{width:100%;height:100%;object-fit:cover;display:block}
+.groupname a{color:inherit;text-decoration:none}
+.groupname a:hover,.groupname a:focus-visible{text-decoration:underline;text-underline-offset:3px}
+.sharebar{display:flex;flex-direction:column;gap:8px;background:var(--soft);border-radius:12px;padding:12px}
+a.button.small{padding:6px 12px;font-size:.875rem}
+.banner{width:100%;aspect-ratio:16/7;object-fit:cover;border-radius:14px;display:block;background:var(--soft)}
+.photoedit{display:flex;flex-direction:column;gap:12px}
+.photoedit .banner{max-height:220px}
+.photoempty{aspect-ratio:16/7;max-height:180px;border:2px dashed var(--line);border-radius:14px;display:grid;place-items:center;color:var(--muted);font-size:.9rem;text-align:center;padding:12px}
+.filebtn{position:relative;overflow:hidden}
+.filebtn input{position:absolute;inset:0;opacity:0;cursor:pointer;font-size:0}

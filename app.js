@@ -96,3 +96,39 @@ export async function syncAccount(user){
   try { await setDoc(ref, { groups: merged }, { merge: true }); } catch (e) {}
   return merged;
 }
+
+// ---------- Sharing ----------
+export const inviteText = name => "Join our Secret Santa" + (name ? ": " + name : "") + "! Open this link and add your name:";
+export const canShare = () => typeof navigator.share === "function";
+// Opens the phone's share sheet (Messages, WhatsApp, email…). Returns false if it isn't available.
+export async function shareInvite(name, url){
+  if (!canShare()) return false;
+  try { await navigator.share({ title: name || "Secret Santa", text: inviteText(name), url }); } catch (e) { /* closed or not allowed */ }
+  return true;
+}
+// A link that opens the Messages app with the invite filled in.
+export const smsHref = (name, url) => "sms:?&body=" + encodeURIComponent(inviteText(name) + " " + url);
+
+// ---------- Group photo ----------
+// Shrinks a picked photo so it fits in the database (no paid storage needed).
+export async function photoToDataUrl(file, maxSide = 1000){
+  if (!file || !/^image\//.test(file.type || "image/")) throw new Error("not-image");
+  const url = URL.createObjectURL(file);
+  try {
+    const img = await new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = () => rej(new Error("unreadable")); i.src = url; });
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
+    const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
+    const c = document.createElement("canvas"); c.width = w; c.height = h;
+    const ctx = c.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
+    let q = 0.82, out = c.toDataURL("image/jpeg", q);
+    while (out.length > 600000 && q > 0.45) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
+    if (out.length > 850000) throw new Error("too-big");
+    return out;
+  } finally { URL.revokeObjectURL(url); }
+}
+export function photoError(e){
+  if (e && e.message === "not-image") return "That file isn't a photo. Pick a JPG, PNG or similar image.";
+  if (e && e.message === "unreadable") return "This browser can't read that photo format. Try a JPG or PNG, or a screenshot of it.";
+  if (e && e.message === "too-big") return "That photo is too detailed to save. Try a different one.";
+  return "Couldn't save the photo. Check your connection and try again.";
+}

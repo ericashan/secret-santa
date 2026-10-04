@@ -33,6 +33,17 @@ service cloud.firestore {
         && request.resource.data.keys().hasOnly(groupFields());
       allow delete: if signedIn() && resource.data.ownerUid == request.auth.uid;
 
+      // The group photo. Everyone with the link sees it; only the organizer changes it.
+      match /public/{docId} {
+        allow read: if true;
+        allow delete: if isOwner(gid);
+        allow create, update: if isOwner(gid)
+          && request.resource.data.keys().hasOnly(['data', 'updatedAt'])
+          && request.resource.data.data is string
+          && request.resource.data.data.size() < 900000
+          && request.resource.data.data.matches('data:image/jpeg;base64,[A-Za-z0-9+/=]+');
+      }
+
       // Organizer-only settings ("who shouldn't draw whom").
       match /admin/{docId} {
         allow read, write: if isOwner(gid);

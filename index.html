@@ -63,7 +63,8 @@
 
 <script type="module">
 import { configured, db, auth, $, el, msg, randomId, fmtDate, personalLink, groupLink, organizeLink,
-         authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount } from "./app.js";
+         authReady, signInWithGoogle, signOutNow, signInError, localGroups, rememberGroup, forgetGroup, syncAccount,
+         copyText, canShare, shareInvite, smsHref } from "./app.js";
 import { doc, onSnapshot, setDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
 import { showLoading, hideLoading } from "./santa-loader.js";
@@ -72,6 +73,8 @@ if (!configured) { const f = $("fatal"); f.textContent = "This site isn't set up
 
 const live = {};      // gid -> group document (or null if it no longer exists)
 const subs = {};      // gid -> unsubscribe
+const photos = {};    // gid -> photo data URL
+const photoSubs = {};
 let mine = localGroups();
 
 function watchGroups(){
@@ -82,8 +85,9 @@ function watchGroups(){
       if (s.exists() && s.data().ev && s.data().ev !== mine[gid].groupName) rememberGroup(gid, { groupName: s.data().ev });
       render();
     }, () => { live[gid] = null; render(); });
+    photoSubs[gid] = onSnapshot(doc(db, "groups", gid, "public", "photo"), s => { photos[gid] = s.exists() ? s.data().data : null; render(); }, () => {});
   });
-  Object.keys(subs).forEach(gid => { if (!mine[gid]) { subs[gid](); delete subs[gid]; delete live[gid]; } });
+  Object.keys(subs).forEach(gid => { if (!mine[gid]) { subs[gid](); photoSubs[gid](); delete subs[gid]; delete photoSubs[gid]; delete live[gid]; delete photos[gid]; } });
 }
 
 function render(){
@@ -93,8 +97,17 @@ function render(){
   ids.forEach(gid => {
     const m = mine[gid], g = live[gid];
     const card = el("article", "panel groupcard");
+    const name = (g && g.ev) || m.groupName || "Secret Santa group";
+    // Where tapping the group takes you: your page, else organizing, else joining.
+    const mainHref = g === null ? null : m.secret ? personalLink(gid, m.secret) : m.organizer ? organizeLink(gid) : groupLink(gid);
+    if (photos[gid] && g !== null) {
+      const pic = el("a", "groupphoto"); pic.href = mainHref; pic.setAttribute("aria-label", "Open " + name);
+      const img = el("img"); img.src = photos[gid]; img.alt = ""; pic.append(img); card.append(pic);
+    }
     const top = el("div", "row spread");
-    top.append(el("h3", "groupname", (g && g.ev) || m.groupName || "Secret Santa group"));
+    const h = el("h3", "groupname");
+    if (mainHref) { const a = el("a", null, name); a.href = mainHref; h.append(a); } else h.textContent = name;
+    top.append(h);
     if (g) { const st = el("span", "status"); const dot = el("span", "dot" + (g.drawn ? " locked" : "")); st.append(dot, g.drawn ? "Names drawn" : "Waiting for the draw"); top.append(st); }
     card.append(top);
 
@@ -116,6 +129,18 @@ function render(){
       else if (!(g && g.drawn)) { const a = el("a", "button" + (m.organizer ? "" : " primary"), "Join this group"); a.href = groupLink(gid); actions.append(a); }
       if (m.organizer) { const a = el("a", "button", "Organize"); a.href = organizeLink(gid); actions.append(a); }
     }
+    // Organizers can send the invite straight from here.
+    let shareRow = null;
+    if (m.organizer && g && !g.drawn) {
+      shareRow = el("div", "sharebar");
+      shareRow.append(el("span", "label", "Invite people"));
+      const btns = el("div", "row");
+      const url = groupLink(gid);
+      if (canShare()) { const sb = el("button", "small", "Share…"); sb.type = "button"; sb.onclick = () => shareInvite(name, url); btns.append(sb); }
+      const tx = el("a", "button small", "Text it"); tx.href = smsHref(name, url); btns.append(tx);
+      const cp = el("button", "small", "Copy link"); cp.type = "button"; cp.onclick = () => copyText(url, cp, "Copy link"); btns.append(cp);
+      shareRow.append(btns);
+    }
     const hide = el("button", "ghost small", "Remove from my list"); hide.type = "button";
     const confirm = el("div", "confirm"); confirm.hidden = true;
     confirm.append(el("span", null, m.secret ? "This only removes it from this list. Keep your personal link if you want to get back in." : "This only removes it from this list."));
@@ -126,6 +151,7 @@ function render(){
     no.onclick = () => { confirm.hidden = true; hide.hidden = false; };
     yes.onclick = async () => { await forgetGroup(gid); mine = localGroups(); watchGroups(); render(); };
     actions.append(hide);
+    if (shareRow) card.append(shareRow);
     card.append(actions, confirm);
     box.append(card);
   });

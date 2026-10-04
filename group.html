@@ -11,6 +11,7 @@
 <body>
 <div class="wrap">
   <header>
+    <img id="banner" class="banner" alt="" hidden>
     <h1 id="title">Secret Santa</h1>
     <div class="facts" id="facts"></div>
   </header>
@@ -120,6 +121,7 @@ function fatal(t){ if (firstLoad) { firstLoad = false; hideLoading(); } const f 
 if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }
 
 const linkFor = s => personalLink(GID, s);
+onSnapshot(doc(db, "groups", GID, "public", "photo"), s => { const d = s.exists() ? s.data().data : null; $("banner").hidden = !d; if (d) $("banner").src = d; }, () => {});
 const cleanUrl = () => location.pathname + location.search;
 if (localGroups()[GID] && localGroups()[GID].organizer) { $("orgLink").href = organizeLink(GID); $("orgLink").hidden = false; }
 

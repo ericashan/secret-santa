@@ -30,7 +30,24 @@
       <div class="panel">
         <p class="hint">Send everyone this link. They join with just their name, and parents add their kids from their own page. Playing too? Open the link and join like everyone else.</p>
         <div class="linkbox" id="inviteLink"></div>
-        <div class="row"><button type="button" class="small" id="copyInvite">Copy invite link</button></div>
+        <div class="row">
+          <button type="button" class="small" id="shareInvite" hidden>Share…</button>
+          <a class="button small" id="textInvite" href="#">Text it</a>
+          <button type="button" class="small" id="copyInvite">Copy invite link</button>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h2>Group photo</h2>
+      <div class="panel photoedit">
+        <img id="photoPreview" class="banner" alt="Group photo" hidden>
+        <div id="photoEmpty" class="photoempty">Add a photo that shows off your group, like last year's gift exchange.</div>
+        <div class="row">
+          <label class="button small filebtn" for="photoInput"><span id="photoBtnText">Choose a photo</span><input type="file" id="photoInput" accept="image/*"></label>
+          <button type="button" class="small ghost" id="photoRemove" hidden>Remove photo</button>
+        </div>
+        <p class="hint" id="photoMsg">Pick from your camera, photo library or files, including Google Drive.</p>
       </div>
     </section>
 
@@ -107,6 +124,7 @@
 
 <script type="module">
 import { configured, db, auth, $, el, msg, groupLink, personalLink, homeLink, groupIdFromUrl, copyText,
+         canShare, shareInvite, smsHref, photoToDataUrl, photoError,
          authReady, signInWithGoogle, signOutNow, signInError, rememberGroup, forgetGroup } from "./app.js";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, getDocs, writeBatch } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
@@ -131,6 +149,32 @@ const copy = copyText;
 
 $("inviteLink").textContent = invite;
 $("copyInvite").onclick = () => copy(invite, $("copyInvite"), "Copy invite link");
+$("shareInvite").hidden = !canShare();
+$("shareInvite").onclick = () => shareInvite(S.game.ev, invite);
+function updateTextLink(){ $("textInvite").href = smsHref(S.game.ev, invite); }
+updateTextLink();
+
+// ---------- Group photo ----------
+function showPhoto(data){
+  $("photoPreview").hidden = !data; if (data) $("photoPreview").src = data;
+  $("photoEmpty").hidden = !!data; $("photoRemove").hidden = !data;
+  $("photoBtnText").textContent = data ? "Change photo" : "Choose a photo";
+}
+$("photoInput").addEventListener("change", async () => {
+  const file = $("photoInput").files[0]; $("photoInput").value = "";
+  if (!file) return;
+  showLoading("Santa's framing your photo…");
+  try {
+    const data = await photoToDataUrl(file);
+    await setDoc(G("public", "photo"), { data, updatedAt: new Date().toISOString() });
+    $("photoMsg").textContent = "Saved. Everyone in the group will see this photo.";
+  } catch (e) { $("photoMsg").textContent = photoError(e); }
+  finally { hideLoading(); }
+});
+$("photoRemove").onclick = async () => {
+  try { await deleteDoc(G("public", "photo")); $("photoMsg").textContent = "Photo removed."; }
+  catch (e) { $("photoMsg").textContent = "Couldn't remove the photo. Try again."; }
+};
 $("signIn").onclick = async () => { msg("authMsg", "", ""); try { await signInWithGoogle(); } catch(e){ msg("authMsg", "err", signInError(e)); } };
 $("signOut").onclick = () => signOutNow();
 
@@ -155,7 +199,8 @@ async function openOrganizer(user){
   rememberGroup(GID, { organizer: true, groupName: gs.data().ev });
   $("who").textContent = "Signed in as " + user.email;
   $("app").hidden = false;
-  unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(doc(db, "groups", GID), s => { if (!s.exists()) { $("app").hidden = true; fatal("This group was deleted."); return; } S.game = s.data(); updateTextLink(); $("title").textContent = S.game.ev || "Organizer"; document.title = (S.game.ev || "Group") + " · Organizer"; render(); }));
+  unsubs.push(onSnapshot(G("public", "photo"), s => showPhoto(s.exists() ? s.data().data : null), () => {}));
   unsubs.push(onSnapshot(G("admin", "settings"), s => { S.excl = (s.exists() && s.data().excl || []).map(p => p.split("|")); render(); }));
   await new Promise(resolve => {
     unsubs.push(onSnapshot(GC("people"), s => {

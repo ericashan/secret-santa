@@ -1,6 +1,6 @@
 // A cartoon Santa dragging a sack of gifts, shown while the site is busy.
 // showLoading(text) / hideLoading() can overlap; Santa stays until the last one finishes.
-// Quick actions (under 0.2s) never show him, and once he appears he stays at least 0.7s.
+// Quick actions (under 0.2s) never show him, and once he appears he stays at least 0.4s.
 
 const SANTA_SVG = `
 <svg class="santa-svg" viewBox="0 0 240 140" role="img" aria-label="Santa dragging a sack of gifts">
@@ -84,6 +84,6 @@ export function hideLoading(){
   if (count || !el) return;
   if (timer) { clearTimeout(timer); timer = null; return; }
   if (el.hidden) return;
-  const wait = Math.max(0, 700 - (Date.now() - shownAt));
+  const wait = Math.max(0, 400 - (Date.now() - shownAt));
   setTimeout(() => { if (!count) el.hidden = true; }, wait);
 }

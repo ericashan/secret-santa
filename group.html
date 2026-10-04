@@ -4,9 +4,25 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Secret Santa</title>
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap">
-<link rel="stylesheet" href="style.css?v=202610041118">
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Start downloading all scripts at once instead of one after another -->
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
+<link rel="modulepreload" href="./app.js?v=202610041127">
+<link rel="modulepreload" href="./i18n.js?v=202610041127">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041127">
+<link rel="modulepreload" href="./nav.js?v=202610041127">
+<link rel="modulepreload" href="./calendar.js?v=202610041127">
+<link rel="modulepreload" href="./icons.js?v=202610041127">
+<link rel="modulepreload" href="./address.js?v=202610041127">
+<link rel="modulepreload" href="./prompts.js?v=202610041127">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041127">
+<!-- Fonts load without holding up the page -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
+<link rel="stylesheet" href="style.css?v=202610041127">
 </head>
 <body>
 <div class="wrap">
@@ -177,25 +193,25 @@ setTimeout(function(){ if (window.__ssReady) return; var d=document.createElemen
 </script>
 <script type="module">
 import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, normalizePhone, formatPhone, formatOf, kindOf, kidsOn, homeLink, organizeLink, groupIdFromUrl,
-         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041118";
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041127";
 import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { showLoading, hideLoading } from "./santa-loader.js?v=202610041118";
-import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041118";
-import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041118";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041127";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041127";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041127";
 window.__ssReady = true;
-import { wishlistHelpers } from "./prompts.js?v=202610041118";
-import { calendarIcon } from "./calendar.js?v=202610041118";
-import { t, startTranslating } from "./i18n.js?v=202610041118";
+import { wishlistHelpers } from "./prompts.js?v=202610041127";
+import { calendarIcon } from "./calendar.js?v=202610041127";
+import { t, startTranslating } from "./i18n.js?v=202610041127";
 const tr = t;
 startTranslating();
-import { mountNav } from "./nav.js?v=202610041118";
+import { mountNav } from "./nav.js?v=202610041127";
 mountNav();
 
 const GID = groupIdFromUrl();
 if (!GID) { location.replace(homeLink()); throw new Error("no group"); }
 const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, addresses: {}, kids: [], match: undefined, revealed: false, addrEditing: false };
 let firstLoad = true;
-showLoading("Santa's fetching your group…", true);
+showLoading("Santa's fetching your group…");   // appears only if loading takes more than a moment
 
 function fatal(t){ if (firstLoad) { firstLoad = false; hideLoading(); } const f = $("fatal"); f.textContent = t; f.hidden = false; }
 if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }

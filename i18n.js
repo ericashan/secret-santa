@@ -4,10 +4,11 @@
 // language is chosen, any text on the page that has a translation is swapped as the
 // page draws itself (including text added later, like messages and buttons).
 // Sentences that include names or numbers use t("Hi {name}!", { name }).
-import KO from "./i18n-ko.js?v=202610041118";
+// The Korean dictionary is only downloaded for people who chose Korean.
+const KO_URL = "./i18n-ko.js?v=202610041127";
 
 export const LANGS = [["en", "English"], ["ko", "한국어"]];
-const DICTS = { en: null, ko: KO };
+const DICTS = { en: null, ko: null };
 const KEY = "ss-lang";
 
 export function getLang(){
@@ -15,7 +16,7 @@ export function getLang(){
   return "en";
 }
 const lang = getLang();
-const dict = DICTS[lang];
+const dict = lang === "ko" ? (await import(KO_URL)).default : null;
 export const locale = lang === "ko" ? "ko-KR" : undefined;   // for dates
 
 export function t(s, vars){

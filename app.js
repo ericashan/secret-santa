@@ -1,14 +1,28 @@
 // Shared setup for every page: Firebase, small helpers, and "my groups".
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
-import { getAuth, onAuthStateChanged, GoogleAuthProvider, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
-import { t, locale } from "./i18n.js?v=202610041118";
-import { firebaseConfig } from "./firebase-config.js?v=202610041118";
+import { getFirestore, initializeFirestore, persistentLocalCache, persistentMultipleTabManager, doc, getDoc, setDoc, deleteField } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { t, locale } from "./i18n.js?v=202610041127";
+import { firebaseConfig } from "./firebase-config.js?v=202610041127";
 
 export const configured = !String(firebaseConfig.apiKey).startsWith("PASTE");
 export const app = configured ? initializeApp(firebaseConfig) : null;
-export const db = configured ? getFirestore(app) : null;
-export const auth = configured ? getAuth(app) : null;
+// Keep a copy of group data on the device so return visits show instantly,
+// then refresh from the server in the background.
+function makeDb(){
+  try { return initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) }); }
+  catch (e) { return getFirestore(app); }
+}
+export const db = configured ? makeDb() : null;
+
+// Google sign-in code is only downloaded when a page needs it (organizers, syncing).
+const AUTH_URL = "https://www.gstatic.com/firebasejs/10.12.2/firebase-auth.js";
+export let auth = null;
+let authMod = null, authLoading = null;
+export function loadAuth(){
+  if (!configured) return Promise.resolve(null);
+  if (!authLoading) authLoading = import(AUTH_URL).then(m => { authMod = m; auth = m.getAuth(app); return m; });
+  return authLoading;
+}
 
 // ---------- Helpers ----------
 export const $ = id => document.getElementById(id);
@@ -31,18 +45,19 @@ export const groupIdFromUrl = () => { const g = new URLSearchParams(location.sea
 // ---------- Sign-in (optional for members, required for organizers) ----------
 let firstAuth = null;
 export function authReady(){
-  if (!auth) return Promise.resolve(null);
-  if (!firstAuth) firstAuth = new Promise(res => { const u = onAuthStateChanged(auth, user => { u(); res(user); }); });
+  if (!configured) return Promise.resolve(null);
+  if (!firstAuth) firstAuth = loadAuth().then(m => new Promise(res => { const u = m.onAuthStateChanged(auth, user => { u(); res(user); }); }));
   return firstAuth;
 }
-export async function signInWithGoogle(){
-  const provider = new GoogleAuthProvider();
+// Pages with a sign-in button call loadAuth() first, so the sign-in window can open
+// straight from the tap (browsers block pop-ups that open after a delay).
+export function signInWithGoogle(){
+  if (!authMod) return loadAuth().then(() => signInWithGoogle());
+  const provider = new authMod.GoogleAuthProvider();
   provider.setCustomParameters({ prompt: "select_account" });
-  const cred = await signInWithPopup(auth, provider);
-  await syncAccount(cred.user);
-  return cred.user;
+  return authMod.signInWithPopup(auth, provider).then(async cred => { await syncAccount(cred.user); return cred.user; });
 }
-export const signOutNow = () => signOut(auth);
+export const signOutNow = () => loadAuth().then(m => m.signOut(auth));
 export function signInError(e){
   if (e && e.code === "auth/unauthorized-domain") return t("This website isn't approved for Google sign-in yet. In Firebase, add it under Authentication → Settings → Authorized domains.");
   if (e && (e.code === "auth/popup-blocked" || e.code === "auth/cancelled-popup-request")) return t("Your browser blocked the sign-in window. Allow pop-ups for this site and try again.");
@@ -114,7 +129,7 @@ export const smsHref = (name, url) => "sms:?&body=" + encodeURIComponent(inviteT
 
 // ---------- Group photo ----------
 // Shrinks a picked photo so it fits in the database (no paid storage needed).
-export async function photoToDataUrl(file, maxSide = 1000){
+export async function photoToDataUrl(file, maxSide = 900){
   if (!file || !/^image\//.test(file.type || "image/")) throw new Error("not-image");
   const url = URL.createObjectURL(file);
   try {
@@ -123,7 +138,7 @@ export async function photoToDataUrl(file, maxSide = 1000){
     const w = Math.max(1, Math.round(img.naturalWidth * scale)), h = Math.max(1, Math.round(img.naturalHeight * scale));
     const c = document.createElement("canvas"); c.width = w; c.height = h;
     const ctx = c.getContext("2d"); ctx.fillStyle = "#ffffff"; ctx.fillRect(0, 0, w, h); ctx.drawImage(img, 0, 0, w, h);
-    let q = 0.82, out = c.toDataURL("image/jpeg", q);
+    let q = 0.75, out = c.toDataURL("image/jpeg", q);
     while (out.length > 600000 && q > 0.45) { q -= 0.1; out = c.toDataURL("image/jpeg", q); }
     if (out.length > 850000) throw new Error("too-big");
     return out;

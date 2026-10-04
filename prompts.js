@@ -1,5 +1,5 @@
 // Tap-to-add prompts above a wishlist box, plus a small "how helpful is this list" meter.
-import { t } from "./i18n.js?v=202610041118";
+import { t } from "./i18n.js?v=202610041127";
 
 const ADULT = ["Sizes", "Favorite colors", "Hobbies I'm into lately", "Stores or brands I like", "Snacks and treats I love",
   "Something I'd never buy myself", "Experiences I'd enjoy", "I already have", "Please no", "Link to something I want"];

@@ -3,33 +3,628 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>Secret Santa has moved</title>
-<meta name="robots" content="noindex">
-<script>
-// Secret Santa moved to https://secret-santa-draw.github.io
-// This sends visitors to the same page there, keeping everything after the address
-// (group links, personal links). From the home page it also hands over this device's
-// saved groups and language, in the "#import=" part of the link, which never leaves the phone.
-(function(){
-  var NEW = "https://secret-santa-draw.github.io";
-  var path = location.pathname.replace(/^\/secret-santa/, "") || "/";
-  var target = NEW + path + location.search + location.hash;
-  if ((path === "/" || path === "/index.html") && !location.hash) {
-    try {
-      var g = localStorage.getItem("ss-my-groups"), l = localStorage.getItem("ss-lang");
-      var groups = g ? JSON.parse(g) : {};
-      if (Object.keys(groups).length || l) {
-        var enc = btoa(unescape(encodeURIComponent(JSON.stringify({ g: groups, l: l }))))
-          .replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-        target = NEW + "/#import=" + enc;
-      }
-    } catch (e) {}
-  }
-  location.replace(target);
-})();
-</script>
+<meta name="theme-color" content="#b3263e">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" type="image/png" sizes="32x32" href="icons/favicon-32.png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+
+<title>Secret Santa</title>
+<link rel="preconnect" href="https://www.gstatic.com">
+<link rel="preconnect" href="https://firestore.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<!-- Start downloading all scripts at once instead of one after another -->
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js">
+<link rel="modulepreload" href="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js">
+<link rel="modulepreload" href="./app.js?v=202610041152">
+<link rel="modulepreload" href="./i18n.js?v=202610041152">
+<link rel="modulepreload" href="./santa-loader.js?v=202610041152">
+<link rel="modulepreload" href="./nav.js?v=202610041152">
+<link rel="modulepreload" href="./calendar.js?v=202610041152">
+<link rel="modulepreload" href="./icons.js?v=202610041152">
+<link rel="modulepreload" href="./address.js?v=202610041152">
+<link rel="modulepreload" href="./prompts.js?v=202610041152">
+<link rel="modulepreload" href="./firebase-config.js?v=202610041152">
+<!-- Fonts load without holding up the page -->
+<link rel="preload" as="style" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap" onload="this.onload=null;this.rel='stylesheet'">
+<noscript><link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bagel+Fat+One&family=Jua&family=Figtree:wght@400;500;600;700&display=swap"></noscript>
+<link rel="stylesheet" href="style.css?v=202610041152">
 </head>
-<body style="font-family:system-ui,sans-serif;padding:24px">
-<p>Secret Santa has moved to <a href="https://secret-santa-draw.github.io/">secret-santa-draw.github.io</a>. Taking you there…</p>
+<body>
+<div class="wrap">
+  <header>
+    <img id="banner" class="banner" alt="" hidden>
+    <h1 id="title">Secret Santa</h1>
+    <div class="facts" id="facts"></div>
+  </header>
+
+  <p id="fatal" class="msg err" hidden></p>
+
+  <!-- Your match -->
+  <section id="matchSec" hidden>
+    <h2>Your match</h2>
+    <div class="panel">
+      <div id="matchHidden" class="row">
+        <button class="primary" id="revealBtn" type="button">Reveal who I'm buying for</button>
+        <span class="hint">Make sure nobody's looking at your screen.</span>
+      </div>
+      <div id="matchShown" hidden>
+        <div class="tags" id="tags"></div>
+        <div class="row" style="margin-top:10px"><button class="ghost" id="hideMatch" type="button">Hide</button></div>
+      </div>
+      <p id="noMatch" class="hint" hidden>You joined after names were drawn, so you don't have a match. Ask the organizer.</p>
+    </div>
+  </section>
+
+  <!-- Join -->
+  <section id="joinSec" hidden>
+    <h2>Join the group</h2>
+    <div class="panel">
+      <form id="joinForm" class="joinform" autocomplete="off">
+        <input id="joinName" placeholder="Your name, as your family knows you" aria-label="Your name" maxlength="40">
+        <div class="field">
+          <input id="joinPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Mobile number (optional)" aria-label="Mobile number (optional)" maxlength="20">
+          <p class="hint">For group texts from the organizer, like reminders. Only the organizer sees it.</p>
+        </div>
+        <div><button class="primary" type="submit" id="joinBtn">Join</button></div>
+      </form>
+      <p id="joinMsg" class="msg err" hidden></p>
+      <p class="hint">No account needed. You'll get a personal link to come back to.</p>
+      <p class="hint" id="joinKidsHint">Adding a baby or child? Join yourself first, then add them.</p>
+    </div>
+  </section>
+
+  <p id="lateMsg" class="hint" hidden>Names have already been drawn for this group. If you already joined, open your personal link. Lost it? Ask the organizer to send it again.</p>
+
+  <!-- My wishlist -->
+  <section id="wishSec" hidden>
+    <h2 id="hello">Your wishlist</h2>
+    <div class="panel">
+      <div class="field">
+        <label class="label" for="myWish">Gift ideas</label>
+        <textarea id="myWish" placeholder="Tap a prompt above, or type anything you'd like…" maxlength="4000"></textarea>
+      </div>
+      <p class="hint" id="wishStatus">Only the person who draws your name sees this. It saves as you type.</p>
+      <label class="check" id="volunteerRow"><input type="checkbox" id="volunteer"> I'm happy to buy for a kid too</label>
+      <p class="hint" id="volunteerHint">Kids get a gift but don't give one, so a few adults buy a second gift for a kid. Volunteers are picked first.</p>
+    </div>
+  </section>
+
+  <!-- Kids -->
+  <!-- In person or virtual (mixed groups) -->
+  <section id="participSec" hidden>
+    <h2>How are you taking part?</h2>
+    <div class="panel">
+      <label class="choice"><input type="radio" name="particip" id="partInPerson" value="inperson"> <span><b>In person</b><span class="hint">I'll be at the gift exchange.</span></span></label>
+      <label class="choice"><input type="radio" name="particip" id="partVirtual" value="virtual"> <span><b>Virtually</b><span class="hint">I can't make it, so gifts to and from me are mailed.</span></span></label>
+      <p id="participMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
+  <!-- Mailing address (virtual exchanges) -->
+  <section id="addrSec" hidden>
+    <h2>Mailing address</h2>
+    <div class="panel">
+      <p class="hint" id="addrIntro">This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.</p>
+      <div id="addrView" hidden>
+        <div class="addrcard" id="addrCard" translate="no"></div>
+        <p class="hint" id="addrBadge"></p>
+        <div class="row"><button type="button" class="small" id="addrEdit">Edit address</button></div>
+      </div>
+      <form id="addrForm" class="addrform" autocomplete="on" novalidate>
+        <div class="field"><label class="label" for="aName">Full name for the package</label><input id="aName" autocomplete="name" maxlength="80" placeholder="First and last name"></div>
+        <label class="check"><input type="checkbox" id="aIntl"> I live outside the US</label>
+        <div id="usFields" class="addrgrid">
+          <div class="field span2"><label class="label" for="aLine1">Street address</label><input id="aLine1" autocomplete="address-line1" maxlength="120" placeholder="123 Elm St"></div>
+          <div class="field span2"><label class="label" for="aLine2">Apt, suite or unit (optional)</label><input id="aLine2" autocomplete="address-line2" maxlength="120" placeholder="Apt 4B"></div>
+          <div class="field span2"><label class="label" for="aCity">City</label><input id="aCity" autocomplete="address-level2" maxlength="60"></div>
+          <div class="field"><label class="label" for="aState">State</label><select id="aState" autocomplete="address-level1"></select></div>
+          <div class="field"><label class="label" for="aZip">ZIP code</label><input id="aZip" autocomplete="postal-code" inputmode="numeric" maxlength="10" placeholder="12345"></div>
+        </div>
+        <div id="intlFields" class="field" hidden>
+          <label class="label" for="aIntlText">Full mailing address, including country</label>
+          <textarea id="aIntlText" autocomplete="street-address" maxlength="400" placeholder="Street and number&#10;City, region, postal code&#10;Country"></textarea>
+          <p class="hint">Addresses outside the US are saved as you type them.</p>
+        </div>
+        <div class="row"><button class="primary" type="submit" id="addrSave">Check and save</button><button type="button" class="ghost" id="addrCancel" hidden>Cancel</button></div>
+      </form>
+      <div id="addrSuggest" class="confirm" hidden>
+        <span id="addrSuggestText"></span>
+        <div id="addrOptions" class="addropts"></div>
+      </div>
+      <p id="addrMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
+  <section id="kidsSec" hidden>
+    <h2>Your kids</h2>
+    <div class="panel">
+      <p class="hint">Add a baby or child who should get a gift. They won't buy for anyone. Only one parent needs to add each child, and their wishlist is yours to fill in.</p>
+      <div id="kidList" class="kidlist"></div>
+      <form id="kidForm" class="row" autocomplete="off">
+        <input id="kidName" placeholder="Child's name" aria-label="Child's name" maxlength="40">
+        <button type="submit" id="kidBtn">Add child</button>
+      </form>
+      <div class="confirm" id="kidConfirm" hidden>
+        <span id="kidConfirmText"></span>
+        <div class="row"><button type="button" class="primary" id="kidSame">Yes, same child</button><button type="button" id="kidDifferent">No, add a different child</button></div>
+      </div>
+      <p id="kidMsg" class="msg err" hidden></p>
+      <p class="hint" id="kidRemoveHint">Need to remove a child? Ask the organizer.</p>
+      <p class="hint" id="kidMailHint" hidden>Your kids' gifts will be mailed to your address.</p>
+    </div>
+  </section>
+
+  <!-- Phone for group texts -->
+  <section id="phoneSec" hidden>
+    <div class="panel">
+      <span class="label">Group texts</span>
+      <p class="hint">Add your mobile number to get reminders from the organizer by text. Only the organizer sees it.</p>
+      <form id="phoneForm" class="row" autocomplete="on">
+        <input id="myPhone" type="tel" inputmode="tel" autocomplete="tel" placeholder="Mobile number" aria-label="Mobile number" maxlength="20">
+        <button type="submit" class="small" id="phoneSave">Save</button>
+        <button type="button" class="small ghost" id="phoneRemove" hidden>Remove</button>
+      </form>
+      <p id="phoneMsg" class="msg" hidden></p>
+    </div>
+  </section>
+
+  <!-- Personal link -->
+  <section id="linkSec" hidden>
+    <div class="panel">
+      <span class="label">Your personal link</span>
+      <p class="hint">Save this link. It's how you get back to your wishlist and your match on any phone or computer. Don't share it.</p>
+      <div class="linkbox" id="myLink" translate="no"></div>
+      <div class="row"><button type="button" class="small" id="copyLink">Copy link</button></div>
+    </div>
+  </section>
+
+  <!-- Who's in -->
+  <section id="peopleSec" hidden>
+    <h2>Who's in</h2>
+    <div class="panel">
+      <div class="chips" id="people"></div>
+      <p class="hint" id="peopleHint"></p>
+    </div>
+  </section>
+
+  <footer class="row"><a href="./">My groups</a><a href="#" id="orgLink" hidden>Organize this group</a></footer>
+</div>
+
+<script>
+// If the page's code doesn't start (for example, an old copy is stuck in the browser), say so instead of sitting silently.
+setTimeout(function(){ if (window.__ssReady) return; var d=document.createElement("div"); d.className="stalled";
+  d.innerHTML='<p>This page didn\'t finish loading.</p><button type="button">Refresh</button>';
+  d.querySelector("button").onclick=function(){ location.reload(); }; document.body.appendChild(d); }, 8000);
+</script>
+<script type="module">
+import { configured, db, $, el, msg, randomId, fmtDate, personalLink, groupLink, formatMoney, currencyOf, normalizePhone, formatPhone, formatOf, kindOf, kidsOn, homeLink, organizeLink, groupIdFromUrl,
+         localGroups, rememberGroup, dropSecret } from "./app.js?v=202610041152";
+import { doc, getDoc, setDoc, deleteDoc, onSnapshot, collection, writeBatch, updateDoc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { showLoading, hideLoading } from "./santa-loader.js?v=202610041152";
+import { babyIcon, normName, firstName, kidRosterId } from "./icons.js?v=202610041152";
+import { US_STATES, checkAddress, lookupUS, sameAddress, exactlySame, labelLines, oneLine } from "./address.js?v=202610041152";
+window.__ssReady = true;
+import { wishlistHelpers } from "./prompts.js?v=202610041152";
+import { calendarIcon } from "./calendar.js?v=202610041152";
+import { t, startTranslating } from "./i18n.js?v=202610041152";
+const tr = t;
+startTranslating();
+import { mountNav } from "./nav.js?v=202610041152";
+mountNav();
+
+const GID = groupIdFromUrl();
+if (!GID) { location.replace(homeLink()); throw new Error("no group"); }
+const S = { secret: null, me: null, game: {}, roster: [], wishes: {}, addresses: {}, kids: [], match: undefined, revealed: false, addrEditing: false };
+let firstLoad = true;
+showLoading("Santa's fetching your group…");   // appears only if loading takes more than a moment
+
+function fatal(t){ if (firstLoad) { firstLoad = false; hideLoading(); } const f = $("fatal"); f.textContent = t; f.hidden = false; }
+if (!configured) { fatal("This site isn't set up yet."); throw new Error("not configured"); }
+
+const linkFor = s => personalLink(GID, s);
+onSnapshot(doc(db, "groups", GID, "public", "photo"), s => { const d = s.exists() ? s.data().data : null; $("banner").hidden = !d; if (d) $("banner").src = d; }, () => {});
+const cleanUrl = () => location.pathname + location.search;
+if (localGroups()[GID] && localGroups()[GID].organizer) { $("orgLink").href = organizeLink(GID); $("orgLink").hidden = false; }
+
+// Live wishlists by id (mine, my kids', and the people I'm buying for).
+const wishSubs = {};
+function watchWish(id){ if (!id || wishSubs[id]) return; wishSubs[id] = onSnapshot(doc(db, "groups", GID, "wishes", id), w => { S.wishes[id] = w.exists() ? w.data() : null; render(); }); }
+function unwatchWishes(){ Object.keys(wishSubs).forEach(k => { wishSubs[k](); delete wishSubs[k]; }); S.wishes = {}; Object.keys(addrSubs).forEach(k => { addrSubs[k](); delete addrSubs[k]; }); S.addresses = {}; }
+// Mailing addresses use the same key as wishlists.
+const addrSubs = {};
+function watchAddr(id){ if (!id || addrSubs[id]) return; addrSubs[id] = onSnapshot(doc(db, "groups", GID, "addresses", id), a => { S.addresses[id] = a.exists() ? a.data() : null; render(); }, () => {}); }
+
+// Autosave a wishlist: one write at a time, after a short pause in typing.
+const savers = {};
+function saveWish(id, value, statusEl){
+  const s = savers[id] || (savers[id] = { timer: null, busy: false, next: null });
+  statusEl.textContent = "Saving…"; s.next = value; clearTimeout(s.timer);
+  s.timer = setTimeout(async () => {
+    if (s.busy) return; s.busy = true;
+    while (s.next !== null) { const v = s.next; s.next = null;
+      try { await updateDoc(doc(db, "groups", GID, "wishes", id), { wishlist: v }); statusEl.textContent = "Saved."; }
+      catch (e) { statusEl.textContent = "Couldn't save just now. Check your connection and keep typing to try again."; } }
+    s.busy = false;
+  }, 700);
+}
+function syncTextarea(ta, id){ const w = S.wishes[id]; if (w && document.activeElement !== ta && ta.value !== (w.wishlist || "")) ta.value = w.wishlist || ""; }
+
+let renderedCalKey = null;
+let myHelpers = null;
+let gotGame = false, gotRoster = false, gotMe = false;
+
+function render(){
+  if (!gotGame || !gotRoster || !gotMe) return;
+  if (firstLoad) { firstLoad = false; hideLoading(); }
+  const g = S.game, me = S.me;
+  $("title").textContent = g.ev || "Secret Santa";
+  document.title = g.ev || "Secret Santa";
+  const facts = $("facts"); facts.textContent = "";
+  const fact = (k, v) => { const s = el("span", "fact"); s.append(k + " "); s.append(el("b", null, v)); facts.append(s); return s; };
+  if (g.budget) fact("Limit", formatMoney(g.budget, currencyOf(g)));
+  if (g.kidBudget && kidsOn(g)) fact("Kids", formatMoney(g.kidBudget, currencyOf(g)));
+  const dateChip = g.date ? fact("Exchange", fmtDate(g.date)) : null;
+  const fmt = formatOf(g);
+  if (fmt === "virtual") fact("Gifts", "mailed");
+  if (fmt === "mixed") fact("Gifts", "in person or mailed");
+  fact(g.drawn ? "Names" : "Status", g.drawn ? "drawn" : "waiting for the draw");
+  if (dateChip) dateChip.append(calendarIcon(g, groupLink(GID), GID));
+
+  $("joinSec").hidden = !!me || !!g.drawn;
+  $("joinName").placeholder = kindOf(g) === "family" ? t("Your name, as your family knows you") : t("Your name, as the group knows you");
+  $("joinKidsHint").hidden = !kidsOn(g);
+  $("lateMsg").hidden = !(g.drawn && !me);
+  $("wishSec").hidden = $("linkSec").hidden = $("kidsSec").hidden = !me;
+  if (!me) $("phoneSec").hidden = true;
+  $("matchSec").hidden = !(g.drawn && me);
+  if (me) {
+    $("hello").textContent = t("Hi {name}! Your wishlist", { name: me.name });
+    $("myLink").textContent = linkFor(S.secret);
+    // Tap-to-add prompts (built once per group type) and the helpfulness meter.
+    const gk = kindOf(g);
+    if (!myHelpers || myHelpers.kind !== gk) {
+      if (myHelpers) { myHelpers.chips.remove(); myHelpers.meter.remove(); }
+      myHelpers = { kind: gk, ...wishlistHelpers($("myWish"), "adult", gk) };
+      $("myWish").before(myHelpers.chips); $("myWish").after(myHelpers.meter);
+    }
+    syncTextarea($("myWish"), me.wishId);
+    myHelpers.update();
+    // Kids are optional per group; hide everything about them when they're off.
+    const kids = kidsOn(g);
+    $("kidsSec").hidden = !kids; $("volunteerRow").hidden = $("volunteerHint").hidden = !kids;
+    $("volunteer").checked = !!me.kidVolunteer;
+    $("volunteer").disabled = !!g.drawn;
+    $("kidForm").hidden = !!g.drawn;
+    renderKids();
+    // Mixed groups: each person chooses in person or virtual.
+    const myWish = S.wishes[me.wishId];
+    const myRemote = !!(myWish && myWish.remote);
+    $("participSec").hidden = fmt !== "mixed";
+    if (fmt === "mixed" && myWish) { $("partVirtual").checked = myRemote; $("partInPerson").checked = !myRemote; }
+    // An address is needed if gifts are mailed to this person: everyone in a virtual group,
+    // and in a mixed group anyone joining virtually or whose Secret Santa is.
+    const mailedToMe = !!(S.match && S.match.mailTo);
+    const needsAddr = fmt === "virtual" || (fmt === "mixed" && (myRemote || mailedToMe));
+    $("addrSec").hidden = !needsAddr;
+    $("addrIntro").textContent = fmt === "virtual" ? t("This is a virtual exchange, so gifts are mailed. Only the person who draws your name and the organizer can see your address.")
+      : myRemote ? t("You're joining virtually, so your gift will be mailed to you. Only the person who draws your name and the organizer can see your address.")
+      : t("Your Secret Santa is joining virtually and will mail your gift. Add the address it should go to. Only they and the organizer can see it.");
+    $("phoneSec").hidden = false;
+    $("kidMailHint").hidden = !(needsAddr && S.kids.length);
+    if (needsAddr) { watchAddr(me.wishId); renderAddr(); }
+  }
+
+  $("peopleSec").hidden = false;
+  const ppl = $("people"); ppl.textContent = "";
+  const myKidRoster = new Set(S.kids.map(k => k.rosterId));
+  S.roster.forEach(r => { const c = el("span", "chip"); c.setAttribute("translate", "no");
+    if (r.kid) c.append(babyIcon());
+    c.append(r.name);
+    if (me && r.id === me.rosterId) c.append(el("span", "you", "you"));
+    else if (myKidRoster.has(r.id)) c.append(el("span", "you", "yours"));
+    ppl.append(c); });
+  const kids = S.roster.filter(r => r.kid).length, adults = S.roster.length - kids;
+  $("peopleHint").textContent = !S.roster.length ? t("Nobody has joined yet. Be the first!") : kids ? t(adults === 1 ? (kids === 1 ? "{a} adult and {k} kid so far." : "{a} adult and {k} kids so far.") : (kids === 1 ? "{a} adults and {k} kid so far." : "{a} adults and {k} kids so far."), { a: adults, k: kids }) : t(adults === 1 ? "{a} adult so far." : "{a} adults so far.", { a: adults });
+
+  renderMatch();
+}
+
+function renderKids(){
+  const list = $("kidList");
+  // Keep existing rows (and any typing in progress); add or remove rows to match.
+  const want = new Set(S.kids.map(k => k.id));
+  [...list.children].forEach(row => { if (!want.has(row.dataset.id)) row.remove(); });
+  S.kids.forEach(k => {
+    let row = list.querySelector('[data-id="' + k.id + '"]');
+    if (!row) {
+      row = el("div", "kidrow"); row.dataset.id = k.id;
+      const head = el("span", "label namewithicon"); head.append(babyIcon(), t("{name}'s wishlist", { name: k.name })); row.append(head);
+      const ta = el("textarea"); ta.maxLength = 4000; ta.placeholder = t("Tap a prompt above, or type anything you'd like…"); ta.setAttribute("aria-label", t("{name}'s wishlist", { name: k.name }));
+      const st = el("p", "hint", "Saves as you type.");
+      ta.addEventListener("input", () => saveWish(k.wishId, ta.value, st));
+      const h = wishlistHelpers(ta, "kid"); row._helpers = h;
+      row.append(h.chips, ta, h.meter, st); list.append(row);
+    }
+    syncTextarea(row.querySelector("textarea"), k.wishId);
+    if (row._helpers) row._helpers.update();
+  });
+  $("kidRemoveHint").hidden = !S.kids.length;
+}
+
+function renderMatch(){
+  if (!(S.game.drawn && S.me)) return;
+  const gifts = (S.match && S.match.gifts) || [];
+  const has = gifts.length > 0;
+  $("noMatch").hidden = has || S.match === undefined;
+  $("matchHidden").hidden = !has || S.revealed;
+  $("matchShown").hidden = !has || !S.revealed;
+  if (!(has && S.revealed)) return;
+  const box = $("tags"); box.textContent = "";
+  gifts.forEach((gft, i) => {
+    const t = el("div", "tag");
+    t.append(el("span", "label", gft.kid ? (i ? "You're also buying for a kid" : "You're buying for a kid") : "You're buying a gift for"));
+    const to = el("span", "to", gft.name); to.setAttribute("translate", "no"); if (gft.kid) { const ic = babyIcon(); ic.classList.add("big"); to.prepend(ic); } t.append(to);
+    const lim = gft.kid ? (S.game.kidBudget || S.game.budget) : S.game.budget;
+    if (lim) t.append(el("span", "hint", tr("Spending limit {amount}", { amount: formatMoney(lim, currencyOf(S.game)) })));
+    // Mail it when the whole group is virtual, or when either of you is joining virtually.
+    const meRemote = !!((S.wishes[S.me.wishId] || {}).remote), themRemote = !!((S.wishes[gft.wishId] || {}).remote);
+    if (formatOf(S.game) === "virtual" || (formatOf(S.game) === "mixed" && (meRemote || themRemote))) {
+      const ml = el("span", "label", "Mail it to"); ml.style.marginTop = "10px"; t.append(ml);
+      const a = S.addresses[gft.wishId];
+      if (a) {
+        const card = el("div", "addrcard"); card.setAttribute("translate", "no"); card.textContent = labelLines(a).join("\n"); t.append(card);
+        const cp = el("button", "small", "Copy address"); cp.type = "button";
+        cp.onclick = async () => { try { await navigator.clipboard.writeText(labelLines(a).join("\n")); cp.textContent = "Copied"; } catch (e) { cp.textContent = "Couldn't copy"; } setTimeout(() => cp.textContent = "Copy address", 1800); };
+        const r = el("div", "row"); r.append(cp); t.append(r);
+      } else t.append(el("p", "wish none", tr(gft.kid ? "Their parent hasn't added a mailing address yet. Check back soon." : "They haven't added a mailing address yet. Check back soon.")));
+    }
+    const lab = el("span", "label", gft.kid ? "Their wishlist (from their parent)" : "Their wishlist"); lab.style.marginTop = "10px"; t.append(lab);
+    const w = S.wishes[gft.wishId], txt = w && w.wishlist && w.wishlist.trim();
+    const wp = el("p", "wish" + (txt ? "" : " none"), txt || tr("No wishlist yet. Check back later.")); if (txt) wp.setAttribute("translate", "no"); t.append(wp);
+    box.append(t);
+  });
+}
+
+// ---------- Subscriptions ----------
+onSnapshot(doc(db, "groups", GID), s => {
+  if (!s.exists()) { fatal("This group doesn't exist. It may have been deleted, or the link is incomplete. Check with whoever invited you."); return; }
+  S.game = s.data(); gotGame = true; render();
+  if (S.secret && S.me) rememberGroup(GID, { groupName: S.game.ev });
+},
+  () => fatal("Couldn't load the group. Check your connection and reload."));
+onSnapshot(collection(db, "groups", GID, "roster"), s => { S.roster = s.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.name.localeCompare(b.name)); gotRoster = true; render(); },
+  () => fatal("Couldn't load the group. Check your connection and reload."));
+
+let unsubs = [];
+function watchMe(secret){
+  unsubs.forEach(u => u()); unsubs = []; unwatchWishes(); S.kids = []; S.match = undefined; $("kidList").textContent = "";
+  S.secret = secret;
+  if (!secret) { S.me = null; gotMe = true; render(); return; }
+  showLoading("Finding your name on the list…");
+  getDoc(doc(db, "groups", GID, "people", secret)).then(s => {
+    if (!s.exists()) { S.me = null; S.secret = null; dropSecret(GID); if (location.hash) history.replaceState(null, "", cleanUrl()); gotMe = true; render(); return; }
+    gotMe = true;
+    rememberGroup(GID, { secret, myName: s.data().name, groupName: S.game.ev || undefined });
+    if (location.hash.slice(1) !== secret) history.replaceState(null, "", cleanUrl() + "#" + secret);
+    unsubs.push(onSnapshot(doc(db, "groups", GID, "phones", secret), ph => { S.phone = ph.exists() ? ph.data().phone : ""; renderPhone(); }, () => {}));
+    unsubs.push(onSnapshot(doc(db, "groups", GID, "people", secret), p => { S.me = p.exists() ? p.data() : null; if (S.me) watchWish(S.me.wishId); render(); }));
+    unsubs.push(onSnapshot(collection(db, "groups", GID, "people", secret, "kids"), ks => {
+      S.kids = ks.docs.map(d => ({ id: d.id, ...d.data() })).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
+      S.kids.forEach(k => watchWish(k.wishId)); render();
+    }));
+    unsubs.push(onSnapshot(doc(db, "groups", GID, "matches", secret), m => {
+      S.match = m.exists() ? m.data() : null;
+      ((S.match && S.match.gifts) || []).forEach(g => { watchWish(g.wishId); watchAddr(g.wishId); });
+      render();
+    }));
+  }).catch(() => fatal("Couldn't load your details. Check your connection and reload.")).finally(hideLoading);
+}
+
+const fromHash = location.hash.slice(1);
+watchMe(/^[A-Za-z0-9]{20,}$/.test(fromHash) ? fromHash : (localGroups()[GID] || {}).secret || null);
+window.addEventListener("hashchange", () => { const h = location.hash.slice(1); if (/^[A-Za-z0-9]{20,}$/.test(h) && h !== S.secret) { gotMe = false; watchMe(h); } });
+
+// ---------- Actions ----------
+const nameTaken = name => S.roster.some(r => r.name.toLowerCase() === name.toLowerCase());
+
+$("joinForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const name = $("joinName").value.trim().replace(/\s+/g, " ");
+  if (!name) { msg("joinMsg", "err", "Type your name first."); return; }
+  if (nameTaken(name)) { msg("joinMsg", "err", t("{name} is already on the list. Add a last initial, or open your personal link if that's you.", { name })); return; }
+  $("joinBtn").disabled = true; msg("joinMsg", "", "");
+  const phone = normalizePhone($("joinPhone").value);
+  if (phone === null) { msg("joinMsg", "err", t("That phone number doesn't look right. Use a 10-digit US number, or start with + and the country code.")); return; }
+  const secret = randomId(), wishId = randomId(), rosterId = randomId(16), joinedAt = new Date().toISOString();
+  const b = writeBatch(db);
+  b.set(doc(db, "groups", GID, "people", secret), { name, wishId, rosterId, joinedAt });
+  b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "" });
+  b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt });
+  if (phone) b.set(doc(db, "groups", GID, "phones", secret), { phone, updatedAt: joinedAt });
+  showLoading("Adding you to Santa's list…");
+  try { await b.commit(); gotMe = false; watchMe(secret); }
+  catch (err) { msg("joinMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't join now." : "Couldn't join just now. Check your connection and try again."); }
+  finally { hideLoading(); }
+  $("joinBtn").disabled = false;
+});
+
+let pendingKid = null;
+function hideKidConfirm(){ $("kidConfirm").hidden = true; pendingKid = null; }
+$("kidName").addEventListener("input", () => { hideKidConfirm(); msg("kidMsg", "", ""); });
+$("kidForm").addEventListener("submit", e => {
+  e.preventDefault();
+  const name = $("kidName").value.trim().replace(/\s+/g, " ");
+  if (!name) { msg("kidMsg", "err", "Type your child's name first."); return; }
+  const n = normName(name);
+  if (S.kids.some(k => normName(k.name) === n)) { msg("kidMsg", "err", t("You've already added {name}.", { name })); return; }
+  const same = S.roster.find(r => normName(r.name) === n);
+  if (same) {
+    msg("kidMsg", "err", same.kid
+      ? (same.parentName ? t("{name} is already on the list, added by {parent}. If that's the same child, you're all set. If not, add a last initial to tell them apart.", { name, parent: same.parentName }) : t("{name} is already on the list. If that's the same child, you're all set. If not, add a last initial to tell them apart.", { name }))
+      : t("Someone named {name} is already on the list. Add a last initial to tell them apart.", { name: same.name }));
+    return;
+  }
+  // Same first name as a kid someone else added? Ask before adding.
+  const similar = S.roster.find(r => r.kid && firstName(r.name) === firstName(name));
+  if (similar) {
+    pendingKid = name;
+    $("kidConfirmText").textContent = similar.parentName ? t("There's already a kid named {other} on the list, added by {parent}. Is that the same child as {name}?", { other: similar.name, parent: similar.parentName, name }) : t("There's already a kid named {other} on the list. Is that the same child as {name}?", { other: similar.name, name });
+    $("kidConfirm").hidden = false; msg("kidMsg", "", "");
+    return;
+  }
+  addKid(name);
+});
+$("kidSame").addEventListener("click", () => { hideKidConfirm(); $("kidName").value = ""; msg("kidMsg", "ok", "Great, no need to add them again. They're already on the list."); });
+$("kidDifferent").addEventListener("click", () => { const name = pendingKid; hideKidConfirm(); if (name) addKid(name); });
+
+async function addKid(name){
+  $("kidBtn").disabled = true; msg("kidMsg", "", "");
+  const kidId = randomId(16), wishId = randomId(), rosterId = kidRosterId(name) || ("kid-" + randomId(16)), createdAt = new Date().toISOString();
+  const b = writeBatch(db);
+  b.set(doc(db, "groups", GID, "people", S.secret, "kids", kidId), { name, wishId, rosterId, createdAt });
+  b.set(doc(db, "groups", GID, "wishes", wishId), { name, wishlist: "", remote: !!((S.wishes[S.me.wishId] || {}).remote) });
+  b.set(doc(db, "groups", GID, "roster", rosterId), { name, joinedAt: createdAt, kid: true, parentName: S.me.name });
+  const myAddr = S.addresses[S.me.wishId];
+  if (formatOf(S.game) !== "inperson" && myAddr) b.set(doc(db, "groups", GID, "addresses", wishId), kidAddress(myAddr, name));
+  showLoading(t("Adding {name} to Santa's list…", { name }));
+  try { await b.commit(); $("kidName").value = ""; }
+  catch (err) {
+    msg("kidMsg", "err", S.game.drawn ? "Names have already been drawn, so you can't add a child now."
+      : err && err.code === "permission-denied" ? t("{name} was just added by someone else. If that's a different child, add a last initial.", { name })
+      : t("Couldn't add {name}. Check your connection and try again.", { name }));
+  }
+  finally { hideLoading(); }
+  $("kidBtn").disabled = false;
+}
+
+$("myWish").addEventListener("input", () => saveWish(S.me.wishId, $("myWish").value, $("wishStatus")));
+$("volunteer").addEventListener("change", async () => {
+  const v = $("volunteer").checked;
+  try { await updateDoc(doc(db, "groups", GID, "people", S.secret), { kidVolunteer: v }); $("volunteerHint").textContent = v ? "Thanks! You may get a kid to buy for as well." : "Kids get a gift but don't give one, so a few adults buy a second gift for a kid. Volunteers are picked first."; }
+  catch (e) { $("volunteer").checked = !v; $("volunteerHint").textContent = "Couldn't save that. Try again."; }
+});
+
+$("copyLink").addEventListener("click", async () => {
+  const b = $("copyLink");
+  try { await navigator.clipboard.writeText(linkFor(S.secret)); b.textContent = "Copied"; }
+  catch (e) { const r = document.createRange(); r.selectNodeContents($("myLink")); const sel = getSelection(); sel.removeAllRanges(); sel.addRange(r); b.textContent = "Selected. Copy it now"; }
+  setTimeout(() => b.textContent = "Copy link", 2000);
+});
+$("revealBtn").addEventListener("click", () => { S.revealed = true; renderMatch(); $("tags").querySelectorAll(".tag").forEach(t => t.classList.add("show")); });
+$("hideMatch").addEventListener("click", () => { S.revealed = false; renderMatch(); });
+
+// ---------- Mailing address ----------
+$("aState").append(new Option("Choose…", ""));
+US_STATES.forEach(([code, name]) => $("aState").append(new Option(name, code)));
+const addrFields = ["aName", "aLine1", "aLine2", "aCity", "aState", "aZip", "aIntlText"];
+function readAddrForm(){
+  const intl = $("aIntl").checked;
+  return { fullName: $("aName").value.trim().replace(/\s+/g, " "), intl: intl ? $("aIntlText").value.trim() : "",
+    line1: intl ? "" : $("aLine1").value.trim().replace(/\s+/g, " "), line2: intl ? "" : $("aLine2").value.trim().replace(/\s+/g, " "),
+    city: intl ? "" : $("aCity").value.trim().replace(/\s+/g, " "), state: intl ? "" : $("aState").value, zip: intl ? "" : $("aZip").value.trim() };
+}
+function fillAddrForm(a){
+  $("aName").value = (a && a.fullName) || ""; $("aIntl").checked = !!(a && a.intl);
+  $("aLine1").value = (a && a.line1) || ""; $("aLine2").value = (a && a.line2) || ""; $("aCity").value = (a && a.city) || "";
+  $("aState").value = (a && a.state) || ""; $("aZip").value = (a && a.zip) || ""; $("aIntlText").value = (a && a.intl) || "";
+  toggleIntl();
+}
+function toggleIntl(){ const i = $("aIntl").checked; $("usFields").hidden = i; $("intlFields").hidden = !i; }
+$("aIntl").addEventListener("change", toggleIntl);
+function hideSuggest(){ $("addrSuggest").hidden = true; $("addrOptions").textContent = ""; }
+addrFields.forEach(id => $(id).addEventListener("input", () => { hideSuggest(); msg("addrMsg", "", ""); }));
+
+function renderAddr(){
+  const saved = S.addresses[S.me.wishId];
+  const editing = S.addrEditing || !saved;
+  $("addrView").hidden = editing; $("addrForm").hidden = !editing;
+  $("addrCancel").hidden = !saved;
+  if (!editing) {
+    $("addrCard").textContent = labelLines(saved).join("\n");
+    $("addrBadge").textContent = saved.intl ? "Saved as typed (outside the US)." : saved.verified ? "✓ Matches US address records." : "Saved as typed. It didn't match US address records, so double-check it.";
+    $("addrBadge").className = "hint" + (saved.verified ? " ok" : "");
+  }
+}
+$("addrEdit").addEventListener("click", () => { S.addrEditing = true; fillAddrForm(S.addresses[S.me.wishId]); hideSuggest(); msg("addrMsg", "", ""); renderAddr(); $("aName").focus(); });
+$("addrCancel").addEventListener("click", () => { S.addrEditing = false; hideSuggest(); msg("addrMsg", "", ""); renderAddr(); });
+
+const kidAddress = (a, kidName) => ({ ...a, fullName: kidName, careOf: a.fullName, updatedAt: new Date().toISOString() });
+async function saveAddress(a, verified){
+  const data = { fullName: a.fullName, careOf: "", line1: a.line1, line2: a.line2, city: a.city, state: a.state, zip: a.zip, intl: a.intl, verified, updatedAt: new Date().toISOString() };
+  const b = writeBatch(db);
+  b.set(doc(db, "groups", GID, "addresses", S.me.wishId), data);
+  S.kids.forEach(k => b.set(doc(db, "groups", GID, "addresses", k.wishId), kidAddress(data, k.name)));
+  showLoading("Saving your address…");
+  try { await b.commit(); S.addrEditing = false; hideSuggest(); msg("addrMsg", "ok", verified ? "Saved. The address matches US address records." : "Saved."); render(); }
+  catch (e) { msg("addrMsg", "err", "Couldn't save the address. Check your connection and try again."); }
+  finally { hideLoading(); }
+}
+
+function offer(text, options){
+  $("addrSuggestText").textContent = text;
+  const box = $("addrOptions"); box.textContent = "";
+  options.forEach(o => { const btn = el("button", "addropt" + (o.primary ? " primary" : ""), null); btn.type = "button";
+    btn.append(el("span", "addropt-title", o.title)); if (o.detail) btn.append(el("span", "addropt-detail", o.detail));
+    btn.onclick = o.onPick; box.append(btn); });
+  $("addrSuggest").hidden = false; msg("addrMsg", "", "");
+}
+
+$("addrForm").addEventListener("submit", async e => {
+  e.preventDefault(); hideSuggest();
+  const a = readAddrForm();
+  const problem = checkAddress(a);
+  if (problem) { msg("addrMsg", "err", problem); return; }
+  if (a.intl) { await saveAddress(a, false); return; }
+  if (/^\s*p\.?\s*o\.?\s*box\b/i.test(a.line1)) { await saveAddress(a, false); msg("addrMsg", "ok", "Saved. PO Boxes can't be checked against address records, so double-check the box number."); return; }
+  showLoading("Checking the address…");
+  const r = await lookupUS(a);
+  hideLoading();
+  if (r.status === "match") {
+    const best = r.suggestions[0];
+    if (exactlySame(a, best)) { await saveAddress(a, true); return; }
+    const opts = r.suggestions.map((sug, i) => {
+      const merged = { ...a, line1: sug.line1, city: sug.city, state: sug.state, zip: /^\d{5}-?\d{4}$/.test(a.zip) && a.zip.slice(0, 5) === sug.zip ? a.zip : sug.zip };
+      return { title: t(i === 0 ? "Use suggested: {address}" : "Use: {address}", { address: oneLine(merged) }), detail: i === 0 ? "Standard mailing format" : "", primary: i === 0, onPick: () => saveAddress(merged, true) };
+    });
+    opts.push({ title: t("Keep what I typed: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, sameAddress(a, best)) });
+    offer(r.suggestions.length > 1 ? "We found a few possible matches. Which should we mail to?" : "We found this address in US records. The suggested version is the best one to use for mailing.", opts);
+  } else if (r.status === "nomatch") {
+    offer("We couldn't find this address in US address records. Check the house number, street name and ZIP code. If it's correct (new homes sometimes aren't listed yet), you can save it anyway.",
+      [{ title: t("Save anyway: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, false) }]);
+  } else {
+    offer("We couldn't check the address right now. You can save it as typed and check again later.",
+      [{ title: t("Save as typed: {address}", { address: oneLine(a) }), onPick: () => saveAddress(a, false) }]);
+  }
+});
+
+// ---------- Phone for group texts ----------
+function renderPhone(){
+  const input = $("myPhone");
+  if (document.activeElement !== input) input.value = S.phone ? formatPhone(S.phone) : "";
+  $("phoneRemove").hidden = !S.phone;
+}
+$("phoneForm").addEventListener("submit", async e => {
+  e.preventDefault();
+  const phone = normalizePhone($("myPhone").value);
+  if (!phone) { msg("phoneMsg", "err", phone === "" ? t("Type your mobile number first.") : t("That phone number doesn't look right. Use a 10-digit US number, or start with + and the country code.")); return; }
+  try { await setDoc(doc(db, "groups", GID, "phones", S.secret), { phone, updatedAt: new Date().toISOString() }); msg("phoneMsg", "ok", t("Saved. The organizer can include you in group texts.")); }
+  catch (err) { msg("phoneMsg", "err", t("Couldn't save. Check your connection and try again.")); }
+});
+$("phoneRemove").addEventListener("click", async () => {
+  try { await deleteDoc(doc(db, "groups", GID, "phones", S.secret)); msg("phoneMsg", "ok", t("Removed. You won't be included in group texts.")); }
+  catch (err) { msg("phoneMsg", "err", t("Couldn't remove it. Try again.")); }
+});
+
+// ---------- In person or virtual (mixed groups) ----------
+document.querySelectorAll('input[name="particip"]').forEach(r => r.addEventListener("change", async () => {
+  const remote = $("partVirtual").checked;
+  const b = writeBatch(db);
+  b.update(doc(db, "groups", GID, "wishes", S.me.wishId), { remote });
+  S.kids.forEach(k => b.update(doc(db, "groups", GID, "wishes", k.wishId), { remote }));   // kids go with their parent
+  try { await b.commit(); msg("participMsg", "ok", remote ? t("Got it. You're joining virtually, so add your mailing address below.") : t("Got it. See you at the exchange!")); }
+  catch (e) { msg("participMsg", "err", t("Couldn't save that. Try again.")); render(); }
+}));
+</script>
 </body>
 </html>
